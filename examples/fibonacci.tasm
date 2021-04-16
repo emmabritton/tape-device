@@ -1,0 +1,16 @@
+Fibonacci
+1.0
+      PRT 0
+      PRTLN
+      PRT 1
+      PRTLN
+      CPY D0 0
+      CPY D1 1
+loop: ADD D0 D1
+   	  PRT ACC
+	  PRTLN
+	  CPY D0 D1
+	  CPY D1 ACC
+	  INC D3
+	  CMP D3 12
+	  JL loop

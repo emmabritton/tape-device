@@ -1,0 +1,44 @@
+FizzBuzz
+1.0
+
+start:			INC D0
+				PRT D0
+				PRTD colon
+				JMP check_fizz
+fizz_result:	JMP check_buzz
+buzz_result:	CMP D1 0
+				JNE buzzer
+				PRTD fizz
+buzzer:			CMP D2 0
+				JNE new_line
+				PRTD buzz
+new_line:		PRTLN
+				CMP D0 15
+				JL start
+				HALT
+
+check_fizz:		CPY D3 D0
+fizz_sub:		SUB D3 3
+				OVER fizz_fail
+				CPY D3 ACC
+				CMP D3 0
+				JE fizz_pass
+				JMP fizz_sub
+fizz_pass:		CPY D1 0
+				JMP fizz_result
+fizz_fail:		CPY D1 1
+				JMP fizz_result
+
+check_buzz:		CPY D3 D0
+buzz_sub:		SUB D3 5
+				OVER buzz_fail
+				CPY D3 ACC
+				CMP D3 0
+				JE buzz_pass
+				JMP buzz_sub
+buzz_pass:		CPY D2 0
+				JMP buzz_result
+buzz_fail:		CPY D2 1
+				JMP buzz_result
+
+end: 			NOP

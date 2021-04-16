@@ -1,0 +1,16 @@
+[package]
+name = "tape-device"
+version = "1.0.0"
+description = "Executor, compiler and decompiler for non existant tape device"
+authors = ["Ray Britton <raybritton@gmail.com>"]
+edition = "2018"
+readme = "README.md"
+license-file = "LICENSE"
+
+[dependencies]
+anyhow = "1.0.40"
+clap = "2.33.3"
+
+
+[dev-dependencies]
+tempfile = "3.2.0"

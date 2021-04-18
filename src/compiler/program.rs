@@ -177,22 +177,30 @@ fn decode(
         }
         "memr" => {
             validate_len("MEMr", parts.len(), 2)?;
-            match decode_addr(parts[1], 1) {
-                Ok(mem) => {
-                    let bytes = mem.to_be_bytes();
-                    Ok([OP_MEM_READ, bytes[0], bytes[1]])
+            if let Ok(reg) = decode_addr_reg(parts[1], 1) {
+                Ok([OP_MEM_READ_REG, reg, 0])
+            } else {
+                match decode_addr(parts[1], 1) {
+                    Ok(mem) => {
+                        let bytes = mem.to_be_bytes();
+                        Ok([OP_MEM_READ, bytes[0], bytes[1]])
+                    }
+                    Err(err) => Err(err),
                 }
-                Err(err) => Err(err),
             }
         }
         "memw" => {
             validate_len("MEMW", parts.len(), 2)?;
-            match decode_addr(parts[1], 1) {
-                Ok(mem) => {
-                    let bytes = mem.to_be_bytes();
-                    Ok([OP_MEM_WRITE, bytes[0], bytes[1]])
+            if let Ok(reg) = decode_addr_reg(parts[1], 1) {
+                Ok([OP_MEM_WRITE_REG, reg, 0])
+            } else {
+                match decode_addr(parts[1], 1) {
+                    Ok(mem) => {
+                        let bytes = mem.to_be_bytes();
+                        Ok([OP_MEM_WRITE, bytes[0], bytes[1]])
+                    }
+                    Err(err) => Err(err),
                 }
-                Err(err) => Err(err),
             }
         }
         "cmp" => {
@@ -228,6 +236,8 @@ fn decode(
             validate_len("PRT", parts.len(), 2)?;
             if let Ok(reg) = decode_reg(parts[1], 0) {
                 Ok([OP_PRINT_REG, reg, 0])
+            } else if let Ok(reg) = decode_addr_reg(parts[1], 0) {
+                Ok([OP_PRINT_MEM_REG, reg, 0])
             } else if let Ok(mem) = decode_addr(parts[1], 0) {
                 let bytes = mem.to_be_bytes();
                 Ok([OP_PRINT_MEM, bytes[0], bytes[1]])
@@ -255,12 +265,16 @@ fn decode(
         }
         "fwrite" => {
             validate_len("FWRITE", parts.len(), 2)?;
-            match decode_addr(parts[1], 1) {
-                Ok(mem) => {
-                    let bytes = mem.to_be_bytes();
-                    Ok([OP_WRITE_FILE, bytes[0], bytes[1]])
+            if let Ok(reg) = decode_addr_reg(parts[1], 0) {
+                Ok([OP_WRITE_FILE_REG, reg, 0])
+            } else {
+                match decode_addr(parts[1], 1) {
+                    Ok(mem) => {
+                        let bytes = mem.to_be_bytes();
+                        Ok([OP_WRITE_FILE, bytes[0], bytes[1]])
+                    }
+                    Err(err) => Err(err),
                 }
-                Err(err) => Err(err),
             }
         }
         "fseek" => {
@@ -269,12 +283,16 @@ fn decode(
         }
         "fread" => {
             validate_len("FREAD", parts.len(), 2)?;
-            match decode_addr(parts[1], 1) {
-                Ok(mem) => {
-                    let bytes = mem.to_be_bytes();
-                    Ok([OP_READ_FILE, bytes[0], bytes[1]])
+            if let Ok(reg) = decode_addr_reg(parts[1], 0) {
+                Ok([OP_READ_FILE_REG, reg, 0])
+            } else {
+                match decode_addr(parts[1], 1) {
+                    Ok(mem) => {
+                        let bytes = mem.to_be_bytes();
+                        Ok([OP_READ_FILE, bytes[0], bytes[1]])
+                    }
+                    Err(err) => Err(err),
                 }
-                Err(err) => Err(err),
             }
         }
         "fskip" => {
@@ -454,9 +472,14 @@ mod test {
         assert_eq!(decode_reg("d2", 0).unwrap(), REG_D2);
         assert_eq!(decode_reg("d3", 0).unwrap(), REG_D3);
         assert_eq!(decode_reg("acc", 0).unwrap(), REG_ACC);
+        assert_eq!(decode_addr_reg("a0", 0).unwrap(), REG_A0);
+        assert_eq!(decode_addr_reg("a1", 0).unwrap(), REG_A1);
         assert!(decode_reg("d5", 0).is_err());
+        assert!(decode_reg("a0", 0).is_err());
         assert!(decode_reg("", 0).is_err());
         assert!(decode_reg("dec", 0).is_err());
+        assert!(decode_addr_reg("d0", 0).is_err());
+        assert!(decode_addr_reg("acc", 0).is_err());
     }
 
     #[test]
@@ -478,6 +501,7 @@ mod test {
         assert_eq!(decode_addr("@xFF00", 0).unwrap(), 65280);
         assert_eq!(decode_addr("@xFFFF", 0).unwrap(), 65535);
         assert!(decode_addr("@1x2", 0).is_err());
+        assert!(decode_addr("a0", 0).is_err());
         assert!(decode_addr("@x2p", 0).is_err());
         assert!(decode_addr("@x", 0).is_err());
     }
@@ -543,6 +567,10 @@ mod test {
             decode("memw @xEA", pc, &map, &mut used_keys, &mut labels).unwrap(),
             [OP_MEM_WRITE, 0, 234]
         );
+        assert_eq!(
+            decode("memw A0", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_MEM_WRITE_REG, REG_A0, 0]
+        );
         assert!(decode("memW D0", pc, &map, &mut used_keys, &mut labels).is_err());
         assert!(decode("MEMW 10", pc, &map, &mut used_keys, &mut labels).is_err());
 
@@ -584,6 +612,10 @@ mod test {
             [OP_MEM_READ, 0, 4]
         );
         assert_eq!(
+            decode("MEMR A1", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_MEM_READ_REG, REG_A1, 0]
+        );
+        assert_eq!(
             decode("memr @x34", pc, &map, &mut used_keys, &mut labels).unwrap(),
             [OP_MEM_READ, 0, 52]
         );
@@ -606,6 +638,10 @@ mod test {
         assert_eq!(
             decode("PRT @xFF", pc, &map, &mut used_keys, &mut labels).unwrap(),
             [OP_PRINT_MEM, 0, 255]
+        );
+        assert_eq!(
+            decode("PRT A0", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_PRINT_MEM_REG, REG_A0, 0]
         );
         assert!(decode("PRT", pc, &map, &mut used_keys, &mut labels).is_err());
 

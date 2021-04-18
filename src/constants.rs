@@ -37,9 +37,11 @@ pub mod code {
     pub const OP_DEC: u8 = 0x06;
 
     pub const OP_COPY_REG_VAL: u8 = 0x10;
-    pub const OP_COPY_REG_REG: u8 = 0x12;
     pub const OP_MEM_READ: u8 = 0x11;
+    pub const OP_COPY_REG_REG: u8 = 0x12;
     pub const OP_MEM_WRITE: u8 = 0x13;
+    pub const OP_MEM_READ_REG: u8 = 0x14;
+    pub const OP_MEM_WRITE_REG: u8 = 0x15;
 
     pub const OP_JMP: u8 = 0x20;
     //JMP is last CMP equal
@@ -69,8 +71,10 @@ pub mod code {
     //Print number
     pub const OP_PRINT_VAL: u8 = 0x32;
     pub const OP_PRINT_LN: u8 = 0x33;
-    //Reads and prints [ACC] bytes as chars from mem to @ADDR
+    //Reads and prints [ACC] bytes as chars from mem at @ADDR
     pub const OP_PRINT_MEM: u8 = 0x34;
+    //Reads and prints [ACC] bytes as chars from mem at REG
+    pub const OP_PRINT_MEM_REG: u8 = 0x35;
 
     //Open file, loads length into [D0][D1][D2][D3]
     //If the length is 1023 bytes then regs set to [00][00][03][FF]
@@ -86,6 +90,12 @@ pub mod code {
     //Reads [ACC] bytes from memory starting at @ADDR
     //Sets [ACC] to written byte count
     pub const OP_WRITE_FILE: u8 = 0x44;
+    //Reads [ACC] bytes from the file to REG
+    //Sets [ACC] to read byte count
+    pub const OP_READ_FILE_REG: u8 = 0x45;
+    //Reads [ACC] bytes from memory starting at REG
+    //Sets [ACC] to written byte count
+    pub const OP_WRITE_FILE_REG: u8 = 0x46;
 
     pub const OP_OVERFLOW: u8 = 0x50;
     pub const OP_NOT_OVERFLOW: u8 = 0x51;

@@ -189,8 +189,12 @@ impl Device {
             OP_SUB_REG_VAL => self.sub(self.get_reg(instruction[1])?, instruction[2]),
             OP_COPY_REG_VAL => self.load(instruction[1], instruction[2])?,
             OP_MEM_READ => self.load(REG_ACC, self.get_mem(addr(&instruction, 1)))?,
+            OP_MEM_READ_REG => {
+                self.load(REG_ACC, self.get_mem(self.get_addr_reg(instruction[1])?))?
+            }
             OP_COPY_REG_REG => self.load(instruction[1], self.get_reg(instruction[2])?)?,
             OP_MEM_WRITE => self.store(addr(&instruction, 1)),
+            OP_MEM_WRITE_REG => self.store(self.get_addr_reg(instruction[1])?),
             OP_JMP_REG => self.jump(self.get_addr_reg(instruction[1])?),
             OP_JE_REG => self.cond_jump(
                 self.acc == compare::EQUAL,
@@ -245,6 +249,8 @@ impl Device {
             OP_PRINT_MEM => self.print_mem(addr(&instruction, 1)),
             OP_OPEN_FILE => self.open_file()?,
             OP_READ_FILE => self.read_file(addr(&instruction, 1))?,
+            OP_READ_FILE_REG => self.read_file(self.get_addr_reg(instruction[1])?)?,
+            OP_WRITE_FILE_REG => self.write_file(self.get_addr_reg(instruction[1])?)?,
             OP_WRITE_FILE => self.write_file(addr(&instruction, 1))?,
             OP_SEEK_FILE => self.seek_file()?,
             OP_SKIP_FILE => self.skip_file(self.get_reg(instruction[1])?)?,
@@ -687,6 +693,11 @@ mod test {
                 [OP_JMP_REG, REG_A1, 0],
                 [OP_HALT, 0, 0],
                 [OP_COPY_REG_VAL, REG_D3, 3],
+                [OP_COPY_REG_VAL, REG_ACC, 90],
+                [OP_MEM_WRITE, 0, 4],
+                [OP_MEM_WRITE, 0, 5],
+                [OP_COPY_REG_VAL, REG_ACC, 91],
+                [OP_MEM_WRITE_REG, REG_A0, 0],
             ],
             vec![],
             None,
@@ -697,6 +708,9 @@ mod test {
         device.assert_data_reg(REG_D3, 3);
         device.assert_addr_reg(REG_A0, 5);
         device.assert_addr_reg(REG_A1, 12);
+
+        device.assert_mem(4, 90);
+        device.assert_mem(5, 91);
     }
 
     #[test]

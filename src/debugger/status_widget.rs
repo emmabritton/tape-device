@@ -59,10 +59,20 @@ impl<'a> Widget for StatusWidget<'a> {
             inner_area.y + 1,
             format!(
                 "D0: {: >3} D1: {: >3} D2: {: >3} D3: {: >3}",
-                (self.formatter_8bit)(self.dump.reg[0]),
-                (self.formatter_8bit)(self.dump.reg[1]),
-                (self.formatter_8bit)(self.dump.reg[2]),
-                (self.formatter_8bit)(self.dump.reg[3])
+                (self.formatter_8bit)(self.dump.data_reg[0]),
+                (self.formatter_8bit)(self.dump.data_reg[1]),
+                (self.formatter_8bit)(self.dump.data_reg[2]),
+                (self.formatter_8bit)(self.dump.data_reg[3])
+            ),
+            Style::default(),
+        );
+        buf.set_string(
+            inner_area.x,
+            inner_area.y + 2,
+            format!(
+                "A0: {: >4} A1: {: >4}",
+                (self.formatter_16bit)(self.dump.addr_reg[0]),
+                (self.formatter_16bit)(self.dump.addr_reg[1]),
             ),
             Style::default(),
         );

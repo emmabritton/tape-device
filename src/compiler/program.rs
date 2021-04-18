@@ -49,7 +49,16 @@ pub(super) fn compile(
                         .count()
                         > 0
                     {
-                        return Err(Error::msg(format!("Invalid label: {}", lbl)));
+                        return Err(Error::msg(format!(
+                            "Invalid label: {} (must be [a-zA-Z0-9_]+)",
+                            lbl
+                        )));
+                    }
+                    if matches!(lbl, "A0" | "A1") {
+                        return Err(Error::msg(format!(
+                            "Invalid label: {} (can't use address regs as labels)",
+                            lbl
+                        )));
                     }
                     labels.insert(lbl.to_string(), (Some(program.len()), vec![]));
                 }
@@ -146,6 +155,24 @@ fn decode(
                     decode_reg(parts[1], 1)?,
                     parse_num(parts[2], 2)?,
                 ])
+            }
+        }
+        "addrh" => {
+            validate_len("addrh", parts.len(), 3)?;
+            let addr_reg = decode_addr_reg(parts[1], 1)?;
+            if let Ok(reg) = decode_reg(parts[2], 0) {
+                Ok([OP_LOAD_ADDR_HIGH, addr_reg, reg])
+            } else {
+                Ok([OP_LOAD_ADDR_HIGH_VAL, addr_reg, parse_num(parts[2], 2)?])
+            }
+        }
+        "addrl" => {
+            validate_len("addrl", parts.len(), 3)?;
+            let addr_reg = decode_addr_reg(parts[1], 1)?;
+            if let Ok(reg) = decode_reg(parts[2], 0) {
+                Ok([OP_LOAD_ADDR_LOW, addr_reg, reg])
+            } else {
+                Ok([OP_LOAD_ADDR_LOW_VAL, addr_reg, parse_num(parts[2], 2)?])
             }
         }
         "memr" => {
@@ -277,9 +304,24 @@ fn decode_jump(parts: &[&str], pc: usize, labels: &mut LabelTable) -> Result<Ins
         OP_OVERFLOW,
         OP_NOT_OVERFLOW,
     ];
+    let reg_ops = [
+        OP_JMP_REG,
+        OP_JL_REG,
+        OP_JE_REG,
+        OP_JNE_REG,
+        OP_JG_REG,
+        OP_OVERFLOW_REG,
+        OP_NOT_OVERFLOW_REG,
+    ];
     let opcode = parts[0].to_ascii_uppercase();
     let idx = stmts.iter().position(|&op| op == opcode).unwrap();
     validate_len(stmts[idx], parts.len(), 2)?;
+    if parts[1].to_ascii_lowercase().as_str() == "a0" {
+        return Ok([reg_ops[idx], REG_A0, 0]);
+    }
+    if parts[1].to_ascii_lowercase().as_str() == "a1" {
+        return Ok([reg_ops[idx], REG_A1, 0]);
+    }
     match decode_addr(parts[1], 1) {
         Ok(addr) => {
             let bytes = addr.to_be_bytes();
@@ -337,6 +379,17 @@ fn decode_addr(input: &str, param: usize) -> Result<u16> {
     };
 }
 
+fn decode_addr_reg(input: &str, param: usize) -> Result<u8> {
+    match input.to_ascii_lowercase().as_str() {
+        "a0" => Ok(REG_A0),
+        "a1" => Ok(REG_A1),
+        _ => Err(Error::msg(format!(
+            "Param {} must be an addr register, was {}",
+            param, input
+        ))),
+    }
+}
+
 fn decode_reg(input: &str, param: usize) -> Result<u8> {
     match input.to_ascii_lowercase().as_str() {
         "d0" => Ok(REG_D0),
@@ -345,7 +398,7 @@ fn decode_reg(input: &str, param: usize) -> Result<u8> {
         "d3" => Ok(REG_D3),
         "acc" => Ok(REG_ACC),
         _ => Err(Error::msg(format!(
-            "Param {} must be a register, was {}",
+            "Param {} must be a data register, was {}",
             param, input
         ))),
     }
@@ -456,6 +509,31 @@ mod test {
             [OP_SUB_REG_VAL, REG_D3, 234]
         );
         assert!(decode("sub D0", pc, &map, &mut used_keys, &mut labels).is_err());
+
+        assert_eq!(
+            decode("addrh A0 D0", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_LOAD_ADDR_HIGH, REG_A0, REG_D0]
+        );
+        assert_eq!(
+            decode("addrh A1 233", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_LOAD_ADDR_HIGH_VAL, REG_A1, 233]
+        );
+        assert_eq!(
+            decode("addrl A1 ACC", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_LOAD_ADDR_LOW, REG_A1, REG_ACC]
+        );
+        assert_eq!(
+            decode("addrl A0 2", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_LOAD_ADDR_LOW_VAL, REG_A0, 2]
+        );
+        assert!(decode("addrh", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("addrl", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("addrh 10", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("addrh d0", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("addrl a0", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("addrh a0 @a", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("addrl @a a0", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("addrh d1 a0", pc, &map, &mut used_keys, &mut labels).is_err());
 
         assert_eq!(
             decode("mEMw @10", pc, &map, &mut used_keys, &mut labels).unwrap(),
@@ -598,6 +676,10 @@ mod test {
             decode("JMP @55", pc, &map, &mut used_keys, &mut labels).unwrap(),
             [OP_JMP, 0, 55]
         );
+        assert_eq!(
+            decode("JMP A0", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_JMP_REG, REG_A0, 0]
+        );
         assert!(decode("jmp", pc, &map, &mut used_keys, &mut labels).is_err());
 
         assert_eq!(
@@ -631,6 +713,10 @@ mod test {
         assert_eq!(
             decode("over tst", pc, &map, &mut used_keys, &mut labels).unwrap(),
             [OP_OVERFLOW, 0, 0]
+        );
+        assert_eq!(
+            decode("over A1", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_OVERFLOW_REG, REG_A1, 0]
         );
         assert!(decode("over", pc, &map, &mut used_keys, &mut labels).is_err());
 
@@ -679,6 +765,38 @@ mod test {
                 [OP_JMP, 0, 2],
                 [OP_NOP, 0, 0],
                 [OP_MEM_READ, 0, 4],
+                [OP_NOP, 0, 0],
+            ]
+        );
+    }
+
+    #[test]
+    fn test_addressing() {
+        let script = r"test prog
+        1
+        ADDRH A0 2
+        CPY D0 xFF
+        CPY D1 xAA
+        ADDRH A0 D0
+        ADDRL A0 D1
+        ADDRH A1 D1
+        ADDRL A1 D0
+        ";
+        let (_, _, program) = compile(
+            script.lines().map(|str| str.to_string()).collect(),
+            HashMap::new(),
+        )
+        .unwrap();
+        assert_eq!(
+            program,
+            vec![
+                [OP_LOAD_ADDR_HIGH_VAL, REG_A0, 2],
+                [OP_COPY_REG_VAL, REG_D0, 255],
+                [OP_COPY_REG_VAL, REG_D1, 170],
+                [OP_LOAD_ADDR_HIGH, REG_A0, REG_D0],
+                [OP_LOAD_ADDR_LOW, REG_A0, REG_D1],
+                [OP_LOAD_ADDR_HIGH, REG_A1, REG_D1],
+                [OP_LOAD_ADDR_LOW, REG_A1, REG_D0],
                 [OP_NOP, 0, 0],
             ]
         );

@@ -1,12 +1,15 @@
 pub mod hardware {
     pub const RAM_SIZE: usize = 0xFFFF;
-    pub const REG_SIZE: usize = 4;
+    pub const DATA_REG_SIZE: usize = 4;
+    pub const ADDR_REG_SIZE: usize = 2;
 
     pub const REG_ACC: u8 = 0x01;
     pub const REG_D0: u8 = 0x02;
     pub const REG_D1: u8 = 0x03;
     pub const REG_D2: u8 = 0x04;
     pub const REG_D3: u8 = 0x05;
+    pub const REG_A0: u8 = 0x06;
+    pub const REG_A1: u8 = 0x07;
 }
 
 pub mod compare {
@@ -19,7 +22,7 @@ pub mod system {
     pub const TAPE_HEADER_1: u8 = 0xFD;
     pub const TAPE_HEADER_2: u8 = 0xA0;
 
-    pub const PRG_VERSION: u8 = 7;
+    pub const PRG_VERSION: u8 = 8;
 
     pub const MAX_PRG_SIZE: u16 = 21845;
 }
@@ -49,6 +52,15 @@ pub mod code {
     pub const OP_JG: u8 = 0x24;
     pub const OP_CMP_REG_REG: u8 = 0x2A;
     pub const OP_CMP_REG_VAL: u8 = 0x2B;
+    pub const OP_JMP_REG: u8 = 0x25;
+    //JMP is last CMP equal
+    pub const OP_JE_REG: u8 = 0x26;
+    //JMP is last CMP not equal
+    pub const OP_JNE_REG: u8 = 0x27;
+    //JMP is last CMP less than
+    pub const OP_JL_REG: u8 = 0x28;
+    //JMP is last CMP greater than
+    pub const OP_JG_REG: u8 = 0x29;
 
     //Reads and prints [ACC] bytes as chars from tape to @ADDR
     pub const OP_PRINT_DAT: u8 = 0x30;
@@ -77,6 +89,13 @@ pub mod code {
 
     pub const OP_OVERFLOW: u8 = 0x50;
     pub const OP_NOT_OVERFLOW: u8 = 0x51;
+    pub const OP_OVERFLOW_REG: u8 = 0x52;
+    pub const OP_NOT_OVERFLOW_REG: u8 = 0x53;
+
+    pub const OP_LOAD_ADDR_HIGH: u8 = 0x60;
+    pub const OP_LOAD_ADDR_LOW: u8 = 0x61;
+    pub const OP_LOAD_ADDR_HIGH_VAL: u8 = 0x62;
+    pub const OP_LOAD_ADDR_LOW_VAL: u8 = 0x63;
 
     //No op
     //Used to mark empty lines/comments as PC = line num

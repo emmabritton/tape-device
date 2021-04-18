@@ -17,7 +17,8 @@ pub struct Device {
     flags: Flags,
     pc: u16,
     acc: u8,
-    reg: [u8; REG_SIZE],
+    data_reg: [u8; DATA_REG_SIZE],
+    addr_reg: [u16; ADDR_REG_SIZE],
     file: Option<File>,
     breakpoints: Vec<u16>,
     printer: RcBox<dyn Printer>,
@@ -26,7 +27,8 @@ pub struct Device {
 pub struct Dump {
     pub pc: u16,
     pub acc: u8,
-    pub reg: [u8; REG_SIZE],
+    pub data_reg: [u8; DATA_REG_SIZE],
+    pub addr_reg: [u16; ADDR_REG_SIZE],
     pub overflow: bool,
 }
 
@@ -48,7 +50,8 @@ impl Device {
             mem: [0; RAM_SIZE],
             flags: Flags::default(),
             acc: 0,
-            reg: [0; REG_SIZE],
+            data_reg: [0; DATA_REG_SIZE],
+            addr_reg: [0; ADDR_REG_SIZE],
             pc: 0,
             breakpoints: vec![],
             tape_ops: ops,
@@ -152,8 +155,8 @@ impl Device {
                 let dump = self.dump();
                 self.elog(&format!("\nDump:"));
                 self.elog(&format!(
-                    "ACC: {:02X}  D0: {:02X}  D1: {:02X}  D2: {:02X}  D3: {:02X}",
-                    dump.acc, dump.reg[0], dump.reg[1], dump.reg[2], dump.reg[3]
+                    "ACC: {:02X}  D0: {:02X}  D1: {:02X}  D2: {:02X}  D3: {:02X} A0: {:04X} A1: {:04X}",
+                    dump.acc, dump.data_reg[0], dump.data_reg[1], dump.data_reg[2], dump.data_reg[3], dump.addr_reg[0], dump.addr_reg[1]
                 ));
                 self.elog(&format!(
                     "PC: {:4}  File open: {}",
@@ -163,6 +166,14 @@ impl Device {
                 false
             }
         };
+    }
+
+    fn cond_jump(&mut self, should_jump: bool, addr: u16) {
+        if should_jump {
+            self.jump(addr)
+        } else {
+            self.pc += 1;
+        }
     }
 
     fn try_execute(&mut self, instruction: Instruction) -> Result<bool> {
@@ -180,49 +191,44 @@ impl Device {
             OP_MEM_READ => self.load(REG_ACC, self.get_mem(addr(&instruction, 1)))?,
             OP_COPY_REG_REG => self.load(instruction[1], self.get_reg(instruction[2])?)?,
             OP_MEM_WRITE => self.store(addr(&instruction, 1)),
+            OP_JMP_REG => self.jump(self.get_addr_reg(instruction[1])?),
+            OP_JE_REG => self.cond_jump(
+                self.acc == compare::EQUAL,
+                self.get_addr_reg(instruction[1])?,
+            ),
+            OP_JL_REG => self.cond_jump(
+                self.acc == compare::LESSER,
+                self.get_addr_reg(instruction[1])?,
+            ),
+            OP_JG_REG => self.cond_jump(
+                self.acc == compare::GREATER,
+                self.get_addr_reg(instruction[1])?,
+            ),
+            OP_JNE_REG => self.cond_jump(
+                self.acc != compare::EQUAL,
+                self.get_addr_reg(instruction[1])?,
+            ),
+            OP_OVERFLOW_REG => {
+                self.cond_jump(self.flags.overflow, self.get_addr_reg(instruction[1])?)
+            }
+            OP_NOT_OVERFLOW_REG => {
+                self.cond_jump(!self.flags.overflow, self.get_addr_reg(instruction[1])?)
+            }
+            OP_LOAD_ADDR_HIGH => {
+                self.set_addr_reg(instruction[1], self.get_reg(instruction[2])?, true)?
+            }
+            OP_LOAD_ADDR_LOW => {
+                self.set_addr_reg(instruction[1], self.get_reg(instruction[2])?, false)?
+            }
+            OP_LOAD_ADDR_HIGH_VAL => self.set_addr_reg(instruction[1], instruction[2], true)?,
+            OP_LOAD_ADDR_LOW_VAL => self.set_addr_reg(instruction[1], instruction[2], false)?,
             OP_JMP => self.jump(addr(&instruction, 1)),
-            OP_JE => {
-                if self.acc == compare::EQUAL {
-                    self.jump(addr(&instruction, 1))
-                } else {
-                    self.pc += 1;
-                }
-            }
-            OP_JL => {
-                if self.acc == compare::LESSER {
-                    self.jump(addr(&instruction, 1))
-                } else {
-                    self.pc += 1;
-                }
-            }
-            OP_JG => {
-                if self.acc == compare::GREATER {
-                    self.jump(addr(&instruction, 1))
-                } else {
-                    self.pc += 1;
-                }
-            }
-            OP_JNE => {
-                if self.acc != compare::EQUAL {
-                    self.jump(addr(&instruction, 1))
-                } else {
-                    self.pc += 1;
-                }
-            }
-            OP_OVERFLOW => {
-                if self.flags.overflow {
-                    self.jump(addr(&instruction, 1))
-                } else {
-                    self.pc += 1;
-                }
-            }
-            OP_NOT_OVERFLOW => {
-                if !self.flags.overflow {
-                    self.jump(addr(&instruction, 1))
-                } else {
-                    self.pc += 1;
-                }
-            }
+            OP_JE => self.cond_jump(self.acc == compare::EQUAL, addr(&instruction, 1)),
+            OP_JL => self.cond_jump(self.acc == compare::LESSER, addr(&instruction, 1)),
+            OP_JG => self.cond_jump(self.acc == compare::GREATER, addr(&instruction, 1)),
+            OP_JNE => self.cond_jump(self.acc != compare::EQUAL, addr(&instruction, 1)),
+            OP_OVERFLOW => self.cond_jump(self.flags.overflow, addr(&instruction, 1)),
+            OP_NOT_OVERFLOW => self.cond_jump(!self.flags.overflow, addr(&instruction, 1)),
             OP_INC => self.change(instruction[1], 1)?,
             OP_DEC => self.change(instruction[1], -1)?,
             OP_CMP_REG_REG => {
@@ -258,7 +264,8 @@ impl Device {
         Dump {
             pc: self.pc,
             acc: self.acc,
-            reg: self.reg.clone(),
+            data_reg: self.data_reg.clone(),
+            addr_reg: self.addr_reg.clone(),
             overflow: self.flags.overflow,
         }
     }
@@ -269,8 +276,13 @@ impl Device {
     }
 
     #[allow(dead_code)]
-    fn assert_reg(&self, reg: u8, value: u8) {
+    fn assert_data_reg(&self, reg: u8, value: u8) {
         assert_eq!(self.get_reg(reg).unwrap(), value);
+    }
+
+    #[allow(dead_code)]
+    fn assert_addr_reg(&self, reg: u8, value: u16) {
+        assert_eq!(self.get_addr_reg(reg).unwrap(), value);
     }
 
     //Accessors
@@ -278,11 +290,19 @@ impl Device {
     fn get_reg(&self, id: u8) -> Result<u8> {
         return match id {
             REG_ACC => Ok(self.acc),
-            REG_D0 => Ok(self.reg[0]),
-            REG_D1 => Ok(self.reg[1]),
-            REG_D2 => Ok(self.reg[2]),
-            REG_D3 => Ok(self.reg[3]),
-            _ => Err(Error::msg(format!("Invalid register: {:02X}", id))),
+            REG_D0 => Ok(self.data_reg[0]),
+            REG_D1 => Ok(self.data_reg[1]),
+            REG_D2 => Ok(self.data_reg[2]),
+            REG_D3 => Ok(self.data_reg[3]),
+            _ => Err(Error::msg(format!("Invalid data register: {:02X}", id))),
+        };
+    }
+
+    fn get_addr_reg(&self, id: u8) -> Result<u16> {
+        return match id {
+            REG_A0 => Ok(self.addr_reg[0]),
+            REG_A1 => Ok(self.addr_reg[1]),
+            _ => Err(Error::msg(format!("Invalid address register: {:02X}", id))),
         };
     }
 
@@ -291,6 +311,22 @@ impl Device {
     }
 
     //Operations
+
+    fn set_addr_reg(&mut self, addr_reg: u8, value: u8, high_byte: bool) -> Result<()> {
+        let mut current_bytes = self.get_addr_reg(addr_reg)?.to_be_bytes();
+        if high_byte {
+            current_bytes[0] = value;
+        } else {
+            current_bytes[1] = value;
+        }
+        match addr_reg {
+            REG_A0 => self.addr_reg[0] = u16::from_be_bytes(current_bytes),
+            REG_A1 => self.addr_reg[1] = u16::from_be_bytes(current_bytes),
+            _ => panic!("Impossible"),
+        }
+        self.pc += 1;
+        Ok(())
+    }
 
     fn open_file(&mut self) -> Result<()> {
         if self.file.is_some() {
@@ -305,10 +341,10 @@ impl Device {
             let pos = file
                 .seek(SeekFrom::End(0))
                 .expect("Unable to get file length");
-            self.reg[3] = (pos & 0xFF) as u8;
-            self.reg[2] = (pos.rotate_right(8) & 0xFF) as u8;
-            self.reg[1] = (pos.rotate_right(16) & 0xFF) as u8;
-            self.reg[0] = (pos.rotate_right(24) & 0xFF) as u8;
+            self.data_reg[3] = (pos & 0xFF) as u8;
+            self.data_reg[2] = (pos.rotate_right(8) & 0xFF) as u8;
+            self.data_reg[1] = (pos.rotate_right(16) & 0xFF) as u8;
+            self.data_reg[0] = (pos.rotate_right(24) & 0xFF) as u8;
             file.seek(SeekFrom::Start(0))
                 .expect("Unable to reset file cursor");
             self.file = Some(file);
@@ -328,10 +364,10 @@ impl Device {
                     0,
                     0,
                     0,
-                    self.reg[0],
-                    self.reg[1],
-                    self.reg[2],
-                    self.reg[3],
+                    self.data_reg[0],
+                    self.data_reg[1],
+                    self.data_reg[2],
+                    self.data_reg[3],
                 ]);
                 match file.seek(SeekFrom::Start(addr)) {
                     Ok(_) => {
@@ -435,12 +471,21 @@ impl Device {
                 value.overflowing_add(1)
             }
         };
+        let update16 = |value: u16| {
+            if diff < 1 {
+                value.overflowing_sub(1)
+            } else {
+                value.overflowing_add(1)
+            }
+        };
         match id {
             REG_ACC => (self.acc, self.flags.overflow) = update(self.acc),
-            REG_D0 => (self.reg[0], self.flags.overflow) = update(self.reg[0]),
-            REG_D1 => (self.reg[1], self.flags.overflow) = update(self.reg[1]),
-            REG_D2 => (self.reg[2], self.flags.overflow) = update(self.reg[2]),
-            REG_D3 => (self.reg[3], self.flags.overflow) = update(self.reg[3]),
+            REG_D0 => (self.data_reg[0], self.flags.overflow) = update(self.data_reg[0]),
+            REG_D1 => (self.data_reg[1], self.flags.overflow) = update(self.data_reg[1]),
+            REG_D2 => (self.data_reg[2], self.flags.overflow) = update(self.data_reg[2]),
+            REG_D3 => (self.data_reg[3], self.flags.overflow) = update(self.data_reg[3]),
+            REG_A0 => (self.addr_reg[0], self.flags.overflow) = update16(self.addr_reg[0]),
+            REG_A1 => (self.addr_reg[1], self.flags.overflow) = update16(self.addr_reg[1]),
             _ => return Err(Error::msg(format!("Invalid register: {:02X}", id))),
         }
         self.pc += 1;
@@ -473,10 +518,10 @@ impl Device {
     fn load(&mut self, dest: u8, value: u8) -> Result<()> {
         match dest {
             REG_ACC => self.acc = value,
-            REG_D0 => self.reg[0] = value,
-            REG_D1 => self.reg[1] = value,
-            REG_D2 => self.reg[2] = value,
-            REG_D3 => self.reg[3] = value,
+            REG_D0 => self.data_reg[0] = value,
+            REG_D1 => self.data_reg[1] = value,
+            REG_D2 => self.data_reg[2] = value,
+            REG_D3 => self.data_reg[3] = value,
             _ => return Err(Error::msg(format!("Invalid register: {:02X}", dest))),
         }
         self.pc += 1;
@@ -544,8 +589,8 @@ mod test {
 
         let dump = device.dump();
         assert_eq!(result, EoF);
-        assert_eq!(dump.2, 22);
-        assert_eq!(dump.0, 4);
+        assert_eq!(dump.pc, 22);
+        assert_eq!(dump.acc, 4);
         device.assert_mem(0, 10);
         device.assert_mem(1, 10);
         device.assert_mem(2, 10);
@@ -583,7 +628,7 @@ mod test {
         );
         device.run();
 
-        device.assert_reg(REG_D1, 1);
+        device.assert_data_reg(REG_D1, 1);
     }
 
     #[test]
@@ -604,7 +649,7 @@ mod test {
         );
         device.run();
 
-        device.assert_reg(REG_D0, 2);
+        device.assert_data_reg(REG_D0, 2);
     }
 
     #[test]
@@ -622,7 +667,36 @@ mod test {
         );
         device.run();
 
-        device.assert_reg(REG_D0, 5);
+        device.assert_data_reg(REG_D0, 5);
+    }
+
+    #[test]
+    fn test_addressing() {
+        let mut device = Device::new(
+            vec![
+                [OP_COPY_REG_VAL, REG_D3, 1],
+                [OP_LOAD_ADDR_HIGH_VAL, REG_A0, 0],
+                [OP_LOAD_ADDR_LOW_VAL, REG_A0, 5],
+                [OP_JMP_REG, REG_A0, 0],
+                [OP_HALT, 0, 0],
+                [OP_COPY_REG_VAL, REG_D3, 2],
+                [OP_COPY_REG_VAL, REG_D1, 0],
+                [OP_LOAD_ADDR_HIGH, REG_A1, REG_D1],
+                [OP_COPY_REG_VAL, REG_D1, 12],
+                [OP_LOAD_ADDR_LOW, REG_A1, REG_D1],
+                [OP_JMP_REG, REG_A1, 0],
+                [OP_HALT, 0, 0],
+                [OP_COPY_REG_VAL, REG_D3, 3],
+            ],
+            vec![],
+            None,
+            StdoutPrinter::new(),
+        );
+        device.run();
+
+        device.assert_data_reg(REG_D3, 3);
+        device.assert_addr_reg(REG_A0, 5);
+        device.assert_addr_reg(REG_A1, 12);
     }
 
     #[test]
@@ -631,9 +705,9 @@ mod test {
         for i in 0..RAM_SIZE {
             device.assert_mem(i as u16, 0);
         }
-        device.assert_reg(REG_ACC, 0);
-        device.assert_reg(REG_D0, 0);
-        device.assert_reg(REG_D1, 0);
+        device.assert_data_reg(REG_ACC, 0);
+        device.assert_data_reg(REG_D0, 0);
+        device.assert_data_reg(REG_D1, 0);
 
         device.execute([OP_COPY_REG_VAL, REG_ACC, 0x01]);
         device.execute([OP_COPY_REG_VAL, REG_D0, 0x08]);
@@ -642,14 +716,14 @@ mod test {
         for i in 0..RAM_SIZE {
             device.assert_mem(i as u16, 0);
         }
-        device.assert_reg(REG_ACC, 1);
-        device.assert_reg(REG_D0, 8);
-        device.assert_reg(REG_D1, 16);
+        device.assert_data_reg(REG_ACC, 1);
+        device.assert_data_reg(REG_D0, 8);
+        device.assert_data_reg(REG_D1, 16);
 
         device.execute([OP_COPY_REG_REG, REG_D0, REG_ACC]);
 
-        device.assert_reg(REG_ACC, 1);
-        device.assert_reg(REG_D0, 1);
+        device.assert_data_reg(REG_ACC, 1);
+        device.assert_data_reg(REG_D0, 1);
 
         device.execute([OP_MEM_WRITE, 0x00, 0x00]);
 
@@ -665,22 +739,22 @@ mod test {
 
         device.execute([OP_SUB_REG_REG, REG_ACC, REG_D3]);
 
-        device.assert_reg(REG_ACC, 4);
-        device.assert_reg(REG_D2, 4);
-        device.assert_reg(REG_D3, 4);
+        device.assert_data_reg(REG_ACC, 4);
+        device.assert_data_reg(REG_D2, 4);
+        device.assert_data_reg(REG_D3, 4);
 
         device.execute([OP_COPY_REG_VAL, REG_D0, 10]);
         device.execute([OP_ADD_REG_VAL, REG_D0, 10]);
 
-        device.assert_reg(REG_ACC, 20);
+        device.assert_data_reg(REG_ACC, 20);
 
         device.execute([OP_INC, REG_ACC, 0]);
 
-        device.assert_reg(REG_ACC, 21);
+        device.assert_data_reg(REG_ACC, 21);
 
         device.execute([OP_DEC, REG_D2, 0]);
         device.execute([OP_DEC, REG_D2, 0]);
 
-        device.assert_reg(REG_D2, 2);
+        device.assert_data_reg(REG_D2, 2);
     }
 }

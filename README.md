@@ -4,7 +4,7 @@ Language for fictional computer with no screen or input devices that executes pr
 
 ### Device
 
-- Registers: ACC, D0, D1, D2, D3
+- Registers: ACC, D0, D1, D2, D3, A0, A1
 - RAM: 65,535 bytes
 - Max program length: 21,845 instructions
 - Max string data: 65,535 bytes (max length per string: 255 bytes)

@@ -419,9 +419,13 @@ impl Device {
     fn change(&mut self, id: u8, diff: isize) -> Result<()> {
         let update = |value: u8| {
             if diff < 1 {
-                value.wrapping_sub(1)
+                let (value, overflowed) = value.overflowing_sub(1);
+                self.flags.overflow = overflowed;
+                value
             } else {
-                value.wrapping_add(1)
+                let (value, overflowed) = value.overflowing_add(1);
+                self.flags.overflow = overflowed;
+                value
             }
         };
         match id {

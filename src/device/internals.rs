@@ -3,7 +3,7 @@ use crate::constants::code::*;
 use crate::constants::compare;
 use crate::constants::hardware::*;
 use crate::device::internals::RunResult::{Breakpoint, EoF, ProgError};
-use crate::printer::Printer;
+use crate::printer::{Printer, RcBox};
 use anyhow::{Error, Result};
 use std::cmp::Ordering;
 use std::fs::{File, OpenOptions};
@@ -15,13 +15,19 @@ pub struct Device {
     tape_data: Vec<u8>,
     input_data: Option<String>,
     flags: Flags,
-    pub debug: Debug,
     pc: u16,
     acc: u8,
     reg: [u8; REG_SIZE],
     file: Option<File>,
     breakpoints: Vec<u16>,
-    printer: Box<dyn Printer>,
+    printer: RcBox<dyn Printer>,
+}
+
+pub struct Dump {
+    pub pc: u16,
+    pub acc: u8,
+    pub reg: [u8; REG_SIZE],
+    pub overflow: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -36,7 +42,7 @@ impl Device {
         ops: Vec<Instruction>,
         data: Vec<u8>,
         input_file: Option<String>,
-        printer: Box<dyn Printer>,
+        printer: RcBox<dyn Printer>,
     ) -> Self {
         Device {
             mem: [0; RAM_SIZE],
@@ -44,7 +50,6 @@ impl Device {
             acc: 0,
             reg: [0; REG_SIZE],
             pc: 0,
-            debug: Debug::default(),
             breakpoints: vec![],
             tape_ops: ops,
             tape_data: data,
@@ -53,11 +58,6 @@ impl Device {
             printer,
         }
     }
-}
-
-#[derive(Debug, Default)]
-pub struct Debug {
-    pub pc: bool,
 }
 
 #[derive(Debug, Default)]
@@ -88,6 +88,14 @@ impl Device {
         self.execute(self.tape_ops[self.pc as usize])
     }
 
+    fn log(&mut self, msg: &str) {
+        self.printer.borrow_mut().print(msg);
+    }
+
+    fn elog(&mut self, msg: &str) {
+        self.printer.borrow_mut().eprint(msg);
+    }
+
     #[allow(dead_code)]
     pub fn set_breakpoint(&mut self, line: u16) {
         self.breakpoints.push(line);
@@ -104,18 +112,14 @@ impl Device {
     }
 
     fn execute(&mut self, instruction: Instruction) -> bool {
-        if self.debug.pc {
-            self.printer.print(&format!("{}", self.pc));
-        }
         return match self.try_execute(instruction) {
             Ok(continue_running) => continue_running,
             Err(err) => {
-                self.printer
-                    .eprint(&format!("\nFatal error at line {}:", self.pc + 1));
-                self.printer.eprint(&format!("{}", err));
-                self.printer.eprint(&format!("\nInstructions:"));
+                self.elog(&format!("\nFatal error at line {}:", self.pc + 1));
+                self.elog(&format!("{}", err));
+                self.elog(&format!("\nInstructions:"));
                 for i in self.pc.saturating_sub(2)..self.pc {
-                    self.printer.eprint(&format!(
+                    self.elog(&format!(
                         "{:4}   {:02X} {:02X} {:02X}",
                         i + 1,
                         self.tape_ops[i as usize][0],
@@ -123,7 +127,7 @@ impl Device {
                         self.tape_ops[i as usize][2]
                     ));
                 }
-                self.printer.eprint(&format!(
+                self.elog(&format!(
                     "{:4} > {:02X} {:02X} {:02X} <",
                     self.pc + 1,
                     instruction[0],
@@ -137,7 +141,7 @@ impl Device {
                         .saturating_add(3)
                         .min(self.tape_ops.len())
                 {
-                    self.printer.eprint(&format!(
+                    self.elog(&format!(
                         "{:4}   {:02X} {:02X} {:02X}",
                         i + 1,
                         self.tape_ops[i as usize][0],
@@ -145,14 +149,17 @@ impl Device {
                         self.tape_ops[i as usize][2]
                     ));
                 }
-                let (acc, reg, pc) = self.dump();
-                self.printer.eprint(&format!("\nDump:"));
-                self.printer.eprint(&format!(
+                let dump = self.dump();
+                self.elog(&format!("\nDump:"));
+                self.elog(&format!(
                     "ACC: {:02X}  D0: {:02X}  D1: {:02X}  D2: {:02X}  D3: {:02X}",
-                    acc, reg[0], reg[1], reg[2], reg[3]
+                    dump.acc, dump.reg[0], dump.reg[1], dump.reg[2], dump.reg[3]
                 ));
-                self.printer
-                    .eprint(&format!("PC: {:4}  File open: {}", pc, self.file.is_some()));
+                self.elog(&format!(
+                    "PC: {:4}  File open: {}",
+                    dump.pc,
+                    self.file.is_some()
+                ));
                 false
             }
         };
@@ -225,7 +232,7 @@ impl Device {
             OP_PRINT_REG => self.print(self.get_reg(instruction[1])?),
             OP_PRINT_VAL => self.print(instruction[1]),
             OP_PRINT_LN => {
-                self.printer.newline();
+                self.printer.borrow_mut().newline();
                 self.pc += 1;
             }
             OP_PRINT_DAT => self.print_dat(addr(&instruction, 1)),
@@ -247,8 +254,13 @@ impl Device {
     }
 
     #[allow(dead_code)]
-    fn dump(&self) -> (u8, [u8; REG_SIZE], u16) {
-        (self.acc, self.reg, self.pc)
+    pub fn dump(&self) -> Dump {
+        Dump {
+            pc: self.pc,
+            acc: self.acc,
+            reg: self.reg.clone(),
+            overflow: self.flags.overflow,
+        }
     }
 
     #[allow(dead_code)]
@@ -390,7 +402,7 @@ impl Device {
     }
 
     fn print(&mut self, val: u8) {
-        self.printer.print(&format!("{}", val));
+        self.log(&format!("{}", val));
         self.pc += 1;
     }
 
@@ -399,8 +411,7 @@ impl Device {
         let str_start = (data_addr + 1) as usize;
         for i in 0..length {
             let chr_addr = str_start + i;
-            self.printer
-                .print(&format!("{}", self.tape_data[chr_addr] as char));
+            self.log(&format!("{}", self.tape_data[chr_addr] as char));
         }
         self.pc += 1;
     }
@@ -409,7 +420,7 @@ impl Device {
         let initial = self.acc as usize;
         while self.acc > 0 {
             let chr = self.mem[addr as usize + (initial - self.acc as usize)] as char;
-            self.printer.print(&format!("{}", chr));
+            self.log(&format!("{}", chr));
             self.acc -= 1;
         }
         self.acc = initial as u8;
@@ -526,7 +537,7 @@ mod test {
             ],
             vec![],
             Some(path.to_string()),
-            StdoutPrinter::boxed(),
+            StdoutPrinter::new(),
         );
 
         let result = device.run();
@@ -553,7 +564,7 @@ mod test {
             ],
             vec![],
             None,
-            StdoutPrinter::boxed(),
+            StdoutPrinter::new(),
         );
         device.run();
     }
@@ -568,7 +579,7 @@ mod test {
             ],
             vec![],
             None,
-            StdoutPrinter::boxed(),
+            StdoutPrinter::new(),
         );
         device.run();
 
@@ -589,7 +600,7 @@ mod test {
             ],
             vec![],
             None,
-            StdoutPrinter::boxed(),
+            StdoutPrinter::new(),
         );
         device.run();
 
@@ -607,7 +618,7 @@ mod test {
             ],
             vec![],
             None,
-            StdoutPrinter::boxed(),
+            StdoutPrinter::new(),
         );
         device.run();
 
@@ -616,7 +627,7 @@ mod test {
 
     #[test]
     fn integration_test() {
-        let mut device = Device::new(vec![], vec![], None, StdoutPrinter::boxed());
+        let mut device = Device::new(vec![], vec![], None, StdoutPrinter::new());
         for i in 0..RAM_SIZE {
             device.assert_mem(i as u16, 0);
         }

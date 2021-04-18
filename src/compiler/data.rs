@@ -1,13 +1,19 @@
 use anyhow::{Error, Result};
 use std::collections::HashMap;
 
-pub(super) fn compile_data(lines: Vec<String>) -> Result<(HashMap<String, u16>, Vec<u8>)> {
+pub(super) fn compile_data(
+    lines: Vec<String>,
+    keep_whitespace: bool,
+) -> Result<(HashMap<String, u16>, Vec<u8>)> {
     let mut mapping = HashMap::with_capacity(lines.len());
     let mut output = Vec::with_capacity(lines.len() * 10);
     for (line_num, line) in lines.iter().enumerate() {
         if let Some(idx) = line.find('=') {
             let (key, content) = line.split_at(idx);
-            let content: String = content.chars().skip(1).collect();
+            let mut content: String = content.chars().skip(1).collect();
+            if !keep_whitespace {
+                content = content.trim().to_string();
+            }
             if key
                 .chars()
                 .any(|chr| !(chr.is_ascii_alphanumeric() || chr == '_'))
@@ -18,7 +24,7 @@ pub(super) fn compile_data(lines: Vec<String>) -> Result<(HashMap<String, u16>, 
                 )));
             }
             if content.len() > 255 {
-                return Err(Error::msg(format!("Line {} in strings is too long, must be at most 255 chars including whitespace", line_num)));
+                return Err(Error::msg(format!("Line {} in strings is too long, must be at most 255 chars (including whitespace if --keep_whitespace)", line_num)));
             }
             if output.len() >= u16::MAX as usize {
                 return Err(Error::msg(format!("Too many strings at line {}, max of {} chars in file including whitespace but not including keys", line_num, u16::MAX - 1)));

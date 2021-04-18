@@ -1,11 +1,11 @@
-mod internals;
+pub mod internals;
 
 use crate::device::internals::Device;
 use crate::printer::StdoutPrinter;
 use crate::tape_reader::read_tape;
 use anyhow::Result;
 
-pub fn start(path: &str, input_path: Option<&str>, debug_pc: bool) -> Result<()> {
+pub fn start(path: &str, input_path: Option<&str>) -> Result<()> {
     let tape = read_tape(path)?;
 
     println!("Running {} v{}", tape.name, tape.version);
@@ -14,9 +14,8 @@ pub fn start(path: &str, input_path: Option<&str>, debug_pc: bool) -> Result<()>
         tape.ops,
         tape.data,
         input_path.map(|str| str.to_string()),
-        StdoutPrinter::boxed(),
+        StdoutPrinter::new(),
     );
-    device.debug.pc = debug_pc;
     device.run();
 
     Ok(())

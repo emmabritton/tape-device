@@ -45,7 +45,7 @@ pub(super) fn compile(
                 } else {
                     if lbl
                         .chars()
-                        .filter(|chr| !(chr.is_ascii_alphabetic() || chr == &'_'))
+                        .filter(|chr| !(chr.is_alphanumeric() || chr == &'_'))
                         .count()
                         > 0
                     {

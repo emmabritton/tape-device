@@ -38,7 +38,7 @@ tape-device compile program.tasm data.dat
 tape-device decompile program.tape
 ```
 
-**Debug program**
+**Debug program** (Must be run from command line)
 ```
 tape-device debug program.tape <input>
 ```

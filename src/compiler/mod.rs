@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-pub fn start(path: Vec<&str>) -> Result<()> {
+pub fn start(path: Vec<&str>, keep_whitespace: bool) -> Result<()> {
     let fda = path[0];
     let str = path.get(1);
 
@@ -28,7 +28,7 @@ pub fn start(path: Vec<&str>) -> Result<()> {
 
     let (strings_data, string_bytes) = if let Some(str) = str {
         println!("Compiling {} as program and {} as data", fda, str);
-        compile_data(read_lines(str)?)?
+        compile_data(read_lines(str)?, keep_whitespace)?
     } else {
         println!("Compiling {} as program with no data", fda);
         (HashMap::new(), vec![])

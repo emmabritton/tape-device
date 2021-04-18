@@ -1,0 +1,59 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+name: Tape Device ASM
+file_extensions:
+  - tasm
+scope: source.tasm
+
+contexts:
+  main:
+    - match: '#.*'
+      scope: comment.cola
+    - match: '[a-zA-Z0-9_]+:'
+      scope: constant.numeric.cola
+      # no params
+    - match: '(?i)\b(fopen|prtln|fseek|nop|halt)\b'
+      scope: keyword.structure.cola
+      # one param: reg
+    - match: '(?i)\b(fskip|dec|inc)\s+(d[0-3]|acc)\b'
+      captures:
+        1: keyword.structure.cola
+        2: entity.other.attribute-name
+      # one param: str
+    - match: '(?i)\b(prtd)\s+([a-zA-Z_0-9]{1,30})\b'
+      captures:
+        1: keyword.structure.cola
+        2: variable.language.cola
+      # one param: addr
+    - match: '(?i)\b(fread|memw|memr|fwrite)\s+(@[0-9]{1,3}|@x[a-zA-Z0-9]{1,3})\b'
+      captures:
+        1: keyword.structure.cola
+        2: variable.language.cola
+      # one param: label
+    - match: '(?i)\b(jmp|je|jne|jl|jg|over|nover)\s+([a-zA-Z0-9_]+)\b'
+      captures:
+        1: keyword.structure.cola
+        2: constant.numeric.cola
+      # two params: reg, reg|num
+    - match: '(?i)\b(add|sub|cmp)\s+(d[0-3]|acc)\s+((d[0-3]|acc)|([0-9]{1,3}|x[0-9A-Fa-f]{1,2}))\b'
+      captures:
+        1: keyword.structure.cola
+        2: entity.other.attribute-name
+        3: support.function.cola
+        4: entity.other.attribute-name
+      # one params: reg|num | addr
+    - match: '(?i)\b(prt)\s+(((d[0-3]|acc)|[0-9]{1,3}|x[0-9A-Fa-f]{1,2})|(@[0-9]{1,3}|@x[a-zA-Z0-9]{1,3}))\b'
+      captures:
+        1: keyword.structure.cola
+        2: support.function.cola
+        3: support.function.cola
+        4: entity.other.attribute-name
+        5: variable.language
+      # one/two params: (reg, reg|num) | addr
+    - match: '(?i)\b(cpy)\s+((d[0-3]|acc)\s+(d[0-3]|acc|[0-9]{1,3}|x[0-9A-Fa-f]{1,2}))\b'
+      captures:
+        1: keyword.structure.cola
+        2: support.function.cola
+        3: entity.other.attribute-name
+        4: support.function.cola

@@ -6,6 +6,7 @@ use clap::{crate_authors, crate_name, crate_version, App, AppSettings, Arg, SubC
 mod common;
 mod compiler;
 mod constants;
+mod debugger;
 mod decompiler;
 mod device;
 mod printer;
@@ -21,14 +22,22 @@ fn main() -> Result<()> {
             AppSettings::VersionlessSubcommands,
         ])
         .subcommand(
-            SubCommand::with_name("compile").arg(
-                Arg::with_name("file")
-                    .help("Compile .tasm and .str into .tape")
-                    .takes_value(true)
-                    .min_values(1)
-                    .max_values(2)
-                    .required(true),
-            ),
+            SubCommand::with_name("compile")
+                .arg(
+                    Arg::with_name("keep_whitespace")
+                        .long("keep_whitespace")
+                        .help("Keep whitespace at end of strings")
+                        .takes_value(false)
+                        .multiple(false),
+                )
+                .arg(
+                    Arg::with_name("file")
+                        .help("Compile .tasm and .str into .tape")
+                        .takes_value(true)
+                        .min_values(1)
+                        .max_values(2)
+                        .required(true),
+                ),
         )
         .subcommand(
             SubCommand::with_name("decompile").arg(
@@ -39,36 +48,46 @@ fn main() -> Result<()> {
                     .required(true),
             ),
         )
+        .subcommand(
+            SubCommand::with_name("debug")
+                .arg(
+                    Arg::with_name("tape")
+                        .help("Device tape to debug")
+                        .takes_value(true)
+                        .multiple(false)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("input")
+                        .help("Optional data tape")
+                        .takes_value(true)
+                        .multiple(false),
+                ),
+        )
         .arg(
             Arg::with_name("tape")
-                .help("Execute device tape")
+                .help("Device tape to execute")
                 .takes_value(true)
                 .multiple(false)
                 .required(true),
         )
         .arg(
             Arg::with_name("input")
-                .help("Optional data tape for tape to use")
+                .help("Optional data tape")
                 .takes_value(true)
-                .multiple(false),
-        )
-        .arg(
-            Arg::with_name("debug_pc")
-                .long("debug_pc")
-                .help("Print PC for each statment")
-                .takes_value(false)
                 .multiple(false),
         )
         .get_matches();
 
     if matches.is_present("tape") {
-        device::start(
-            matches.value_of("tape").unwrap(),
-            matches.value_of("input"),
-            matches.is_present("debug_pc"),
-        )?;
+        device::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;
+    } else if let Some(matches) = matches.subcommand_matches("debug") {
+        debugger::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;
     } else if let Some(matches) = matches.subcommand_matches("compile") {
-        compiler::start(matches.values_of("file").unwrap().collect())?;
+        compiler::start(
+            matches.values_of("file").unwrap().collect(),
+            matches.is_present("keep_whitespace"),
+        )?;
     } else if let Some(matches) = matches.subcommand_matches("decompile") {
         decompiler::start(matches.value_of("file").unwrap())?;
     }

@@ -4,6 +4,50 @@ use crate::constants::hardware::*;
 use crate::tape_reader::read_tape;
 use anyhow::Result;
 
+pub struct Decoded {
+    pub bytes: Instruction,
+    pub strings: Vec<String>,
+    pub line_num: usize,
+    pub is_jump_target: bool,
+}
+
+impl Decoded {
+    pub fn new(
+        bytes: Instruction,
+        strings: Vec<String>,
+        line_num: usize,
+        is_jump_target: bool,
+    ) -> Self {
+        Decoded {
+            bytes,
+            strings,
+            line_num,
+            is_jump_target,
+        }
+    }
+}
+
+impl Decoded {
+    pub fn is_param_16_bit(&self) -> bool {
+        matches!(
+            self.bytes[0],
+            OP_MEM_READ
+                | OP_MEM_WRITE
+                | OP_PRINT_MEM
+                | OP_PRINT_DAT
+                | OP_READ_FILE
+                | OP_WRITE_FILE
+                | OP_JMP
+                | OP_JE
+                | OP_JG
+                | OP_JNE
+                | OP_JL
+                | OP_OVERFLOW
+                | OP_NOT_OVERFLOW
+        )
+    }
+}
+
 pub fn start(path: &str) -> Result<()> {
     println!("Decompiling tape at {}", path);
 
@@ -15,8 +59,26 @@ pub fn start(path: &str) -> Result<()> {
     );
     println!("{} ops, {}b data", tape.ops.len(), tape.data.len());
     println!("\n\nOps:");
+    let jmp_target = collect_jump_targets(&tape.ops);
+    for (idx, op) in tape.ops.iter().enumerate() {
+        let op = decode(op, &tape.data, idx, jmp_target.contains(&idx));
+        let lbl = if op.is_jump_target {
+            format!("{:04X}", op.line_num)
+        } else {
+            String::from("    ")
+        };
+        println!(
+            "{} {:<6}  {:<5}  {:<5}",
+            lbl, op.strings[0], op.strings[1], op.strings[2]
+        )
+    }
+
+    Ok(())
+}
+
+pub fn collect_jump_targets(ops: &Vec<Instruction>) -> Vec<usize> {
     let mut jmp_target = vec![];
-    for op in &tape.ops {
+    for op in ops {
         if matches!(
             op[0],
             OP_JMP | OP_JE | OP_JNE | OP_JL | OP_JG | OP_OVERFLOW | OP_NOT_OVERFLOW
@@ -25,20 +87,11 @@ pub fn start(path: &str) -> Result<()> {
             jmp_target.push(addr);
         }
     }
-    for (idx, op) in tape.ops.iter().enumerate() {
-        let lbl = if jmp_target.contains(&idx) {
-            format!("{:04X}", idx)
-        } else {
-            String::from("    ")
-        };
-        println!("{}", decode(op, &tape.data, lbl));
-    }
-
-    Ok(())
+    jmp_target
 }
 
-fn decode(op: &Instruction, strings: &[u8], lbl: String) -> String {
-    let (op, p1, p2): (&str, String, String) = match op[0] {
+pub fn decode(op: &Instruction, strings: &[u8], line_num: usize, is_jump_target: bool) -> Decoded {
+    let (op_str, p1_str, p2_str): (&str, String, String) = match op[0] {
         OP_ADD_REG_VAL => ("ADD", decode_reg(op[1]), decode_num(op[2])),
         OP_ADD_REG_REG => ("ADD", decode_reg(op[1]), decode_reg(op[2])),
         OP_COPY_REG_VAL => ("CPY", decode_reg(op[1]), decode_num(op[2])),
@@ -70,14 +123,14 @@ fn decode(op: &Instruction, strings: &[u8], lbl: String) -> String {
         OP_NOT_OVERFLOW => ("NOVER", decode_addr(op[1], op[2]), String::new()),
         OP_NOP => ("NOP", String::new(), String::new()),
         OP_HALT => ("HALT", String::new(), String::new()),
-        _ => {
-            return format!(
-                "{} {:<6}  {:<5}  {:<5} ** Unknown op",
-                lbl, op[0], op[1], op[2]
-            )
-        }
+        _ => ("", String::new(), String::new()),
     };
-    format!("{} {:<6}  {:<5}  {:<5}", lbl, op, p1, p2)
+    Decoded::new(
+        op.clone(),
+        vec![op_str.to_string(), p1_str, p2_str],
+        line_num,
+        is_jump_target,
+    )
 }
 
 fn decode_string(b1: u8, b2: u8, data: &[u8]) -> String {

@@ -5,7 +5,7 @@ pub(super) fn compile_strings(lines: Vec<String>) -> Result<(HashMap<String, u16
     let mut mapping = HashMap::with_capacity(lines.len());
     let mut output = Vec::with_capacity(lines.len() * 10);
     for (line_num, line) in lines.iter().enumerate() {
-        if let Some(idx) = line.find(':') {
+        if let Some(idx) = line.find('=') {
             let (key, content) = line.split_at(idx);
             let content: String = content.chars().skip(1).collect();
             if key

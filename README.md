@@ -1,39 +1,44 @@
 # Tape Device
 
-Language for fictional tape based computer with no screen or input devices that executes asm programs optionally with input data.
+Language for fictional computer with no screen or input devices that executes programs optionally with input data.
 
-#### Hardware
+### Device
 
 - Registers: ACC, D0, D1, D2, D3
 - RAM: 65535 bytes
-- Max program length: 21,845
-- Max 
+- Max program length: 21,845 instructions
+- Max string data: 65,535 bytes (max length per string: 255 bytes)
 
-### Info
+## Info
 
 Example program
 ```
 CPY D0 1
-CPY D1 1
+CPY D1 2
 ADD D0 D1
 PRT ACC
 ```
 
-Prints `2`
+Prints `3`
 
-### Usage
+## Usage
 
-Execute program
+**Execute program**
 ```
-tape-device program.cart <input.dat>
-```
-
-Compile program
-```
-tape-device compile program.tasm data.str
+tape-device program.tape <input>
 ```
 
-Decompile program
+**Compile program**
+```
+tape-device compile program.tasm data.dat
+```
+
+**Decompile program**
 ```
 tape-device decompile program.tape
+```
+
+**Debug program**
+```
+tape-device debug program.tape <input>
 ```

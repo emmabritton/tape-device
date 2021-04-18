@@ -27,10 +27,10 @@ pub fn start(path: Vec<&str>) -> Result<()> {
     output_file_path.push(output_file_name);
 
     let (strings_data, string_bytes) = if let Some(str) = str {
-        println!("Compiling {} as program and {} as strings", fda, str);
+        println!("Compiling {} as program and {} as data", fda, str);
         compile_strings(read_lines(str)?)?
     } else {
-        println!("Compiling {} as program with no strings", fda);
+        println!("Compiling {} as program with no data", fda);
         (HashMap::new(), vec![])
     };
     println!("Writing to {}", output_file_path.to_string_lossy());

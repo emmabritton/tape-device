@@ -1,13 +1,15 @@
 # Language
 
-### Params 
+## Assembly
+
+#### Params 
 
 - `reg`: `acc`, `d0`, `d1`, `d2`, `d3`
 - `num`: `0`-`255` or `x0`-`xFF`
 - `addr`: `x0`-`xFFFF` 
 - `lbl`: `[a-zA-Z0-9_]+`
 
-## Math
+### Math
 
 `ADD reg reg|num`
 
@@ -17,7 +19,7 @@ Sets `ACC` = param1 + param2
 
 Sets `ACC` = param1 - param2
 
-## Data
+### Data
 
 `CPY reg reg|num`
 
@@ -31,7 +33,7 @@ Read byte from `addr` in memory and set in `ACC`
 
 Read from `ACC` and set byte `addr` in memory
 
-## Printing
+### Printing
 
 `PRT reg|num`
 
@@ -49,13 +51,13 @@ Print string from tape data
 
 Go to new line
 
-## Comparison
+### Comparison
 
 `CMP reg reg|num`
 
 Compare param1 and param2 and set result in `ACC`
 
-## Jump
+### Jump
 
 `JMP lbl`
 
@@ -85,7 +87,7 @@ Jump to label if overflow flag set
 
 Jump to label if overflow flag not set
 
-## File
+### File
 
 `FOPEN`
 
@@ -107,8 +109,10 @@ Skip up to `reg` bytes in file, populates `ACC` with number of bytes actually sk
 
 Move file cursor to `[D3][D2][D1][D0]` (0..4294967295)
 
-## Misc
+### Misc
 
 `NOP`
 
 Do nothing
+
+##

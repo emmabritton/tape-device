@@ -19,7 +19,7 @@ pub mod system {
     pub const TAPE_HEADER_1: u8 = 0xFD;
     pub const TAPE_HEADER_2: u8 = 0xA0;
 
-    pub const PRG_VERSION: u8 = 0x06;
+    pub const PRG_VERSION: u8 = 7;
 
     pub const MAX_PRG_SIZE: u16 = 21845;
 }

@@ -1,3 +1,5 @@
+#![feature(destructuring_assignment)]
+
 use anyhow::Result;
 use clap::{crate_authors, crate_name, crate_version, App, AppSettings, Arg, SubCommand};
 

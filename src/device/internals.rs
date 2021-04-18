@@ -419,21 +419,17 @@ impl Device {
     fn change(&mut self, id: u8, diff: isize) -> Result<()> {
         let update = |value: u8| {
             if diff < 1 {
-                let (value, overflowed) = value.overflowing_sub(1);
-                self.flags.overflow = overflowed;
-                value
+                value.overflowing_sub(1)
             } else {
-                let (value, overflowed) = value.overflowing_add(1);
-                self.flags.overflow = overflowed;
-                value
+                value.overflowing_add(1)
             }
         };
         match id {
-            REG_ACC => self.acc = update(self.acc),
-            REG_D0 => self.reg[0] = update(self.reg[0]),
-            REG_D1 => self.reg[1] = update(self.reg[1]),
-            REG_D2 => self.reg[2] = update(self.reg[2]),
-            REG_D3 => self.reg[3] = update(self.reg[3]),
+            REG_ACC => (self.acc, self.flags.overflow) = update(self.acc),
+            REG_D0 => (self.reg[0], self.flags.overflow) = update(self.reg[0]),
+            REG_D1 => (self.reg[1], self.flags.overflow) = update(self.reg[1]),
+            REG_D2 => (self.reg[2], self.flags.overflow) = update(self.reg[2]),
+            REG_D3 => (self.reg[3], self.flags.overflow) = update(self.reg[3]),
             _ => return Err(Error::msg(format!("Invalid register: {:02X}", id))),
         }
         self.pc += 1;

@@ -1,9 +1,9 @@
+mod data;
 mod program;
-mod strings;
 
 use crate::common::read_lines;
+use crate::compiler::data::compile_data;
 use crate::compiler::program::compile;
-use crate::compiler::strings::compile_strings;
 use crate::constants::code::ALIGNMENT_PADDING;
 use crate::constants::system::*;
 use anyhow::{Error, Result};
@@ -28,7 +28,7 @@ pub fn start(path: Vec<&str>) -> Result<()> {
 
     let (strings_data, string_bytes) = if let Some(str) = str {
         println!("Compiling {} as program and {} as data", fda, str);
-        compile_strings(read_lines(str)?)?
+        compile_data(read_lines(str)?)?
     } else {
         println!("Compiling {} as program with no data", fda);
         (HashMap::new(), vec![])

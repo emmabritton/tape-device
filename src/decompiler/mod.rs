@@ -44,6 +44,7 @@ impl Decoded {
                 | OP_JL
                 | OP_OVERFLOW
                 | OP_NOT_OVERFLOW
+                | OP_CALL_ADDR
         )
     }
 }
@@ -138,6 +139,12 @@ pub fn decode(op: &Instruction, strings: &[u8], line_num: usize, is_jump_target:
         OP_LOAD_ADDR_LOW_VAL => ("ADDRL", decode_reg(op[1]), decode_num(op[2])),
         OP_NOP => ("NOP", String::new(), String::new()),
         OP_HALT => ("HALT", String::new(), String::new()),
+        OP_RETURN => ("RET", String::new(), String::new()),
+        OP_CALL_ADDR => ("CALL", decode_addr(op[1], op[2]), String::new()),
+        OP_CALL_REG => ("CALL", decode_reg(op[1]), String::new()),
+        OP_POP_REG => ("POP", decode_reg(op[1]), String::new()),
+        OP_PUSH_REG => ("PUSH", decode_reg(op[1]), String::new()),
+        OP_PUSH_VAL => ("PUSH", decode_num(op[1]), String::new()),
         _ => ("", String::new(), String::new()),
     };
     Decoded::new(

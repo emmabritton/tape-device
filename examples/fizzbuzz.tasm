@@ -4,9 +4,9 @@ FizzBuzz
 start:			INC D0
 				PRT D0
 				PRTD colon
-				JMP check_fizz
-fizz_result:	JMP check_buzz
-buzz_result:	CMP D1 0
+				CALL check_fizz
+            	CALL check_buzz
+            	CMP D1 0
 				JNE buzzer
 				PRTD fizz
 buzzer:			CMP D2 0
@@ -25,9 +25,9 @@ fizz_sub:		SUB D3 3
 				JE fizz_pass
 				JMP fizz_sub
 fizz_pass:		CPY D1 0
-				JMP fizz_result
+				ret
 fizz_fail:		CPY D1 1
-				JMP fizz_result
+				ret
 
 check_buzz:		CPY D3 D0
 buzz_sub:		SUB D3 5
@@ -37,8 +37,8 @@ buzz_sub:		SUB D3 5
 				JE buzz_pass
 				JMP buzz_sub
 buzz_pass:		CPY D2 0
-				JMP buzz_result
+				ret
 buzz_fail:		CPY D2 1
-				JMP buzz_result
+				ret
 
 end: 			NOP

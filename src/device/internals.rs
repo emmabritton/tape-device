@@ -9,6 +9,8 @@ use std::cmp::Ordering;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 
+const SP_MAX: u16 = u16::MAX;
+
 pub struct Device {
     mem: [u8; RAM_SIZE],
     tape_ops: Vec<Instruction>,
@@ -17,6 +19,7 @@ pub struct Device {
     flags: Flags,
     pc: u16,
     acc: u8,
+    sp: u16,
     data_reg: [u8; DATA_REG_SIZE],
     addr_reg: [u16; ADDR_REG_SIZE],
     file: Option<File>,
@@ -27,6 +30,7 @@ pub struct Device {
 pub struct Dump {
     pub pc: u16,
     pub acc: u8,
+    pub sp: u16,
     pub data_reg: [u8; DATA_REG_SIZE],
     pub addr_reg: [u16; ADDR_REG_SIZE],
     pub overflow: bool,
@@ -53,6 +57,7 @@ impl Device {
             data_reg: [0; DATA_REG_SIZE],
             addr_reg: [0; ADDR_REG_SIZE],
             pc: 0,
+            sp: SP_MAX,
             breakpoints: vec![],
             tape_ops: ops,
             tape_data: data,
@@ -159,8 +164,9 @@ impl Device {
                     dump.acc, dump.data_reg[0], dump.data_reg[1], dump.data_reg[2], dump.data_reg[3], dump.addr_reg[0], dump.addr_reg[1]
                 ));
                 self.elog(&format!(
-                    "PC: {:4}  File open: {}",
+                    "PC: {:4} SP: {:4X} File open: {}",
                     dump.pc,
+                    dump.sp,
                     self.file.is_some()
                 ));
                 false
@@ -255,6 +261,12 @@ impl Device {
             OP_SEEK_FILE => self.seek_file()?,
             OP_SKIP_FILE => self.skip_file(self.get_reg(instruction[1])?)?,
             OP_HALT => return Ok(false),
+            OP_PUSH_VAL => self.stack_push(instruction[1]),
+            OP_PUSH_REG => self.stack_push(self.get_reg(instruction[1])?),
+            OP_POP_REG => self.stack_pop(instruction[1])?,
+            OP_RETURN => self.stack_return(),
+            OP_CALL_ADDR => self.stack_call(addr(&instruction, 1)),
+            OP_CALL_REG => self.stack_call(self.get_addr_reg(instruction[1])?),
             _ => {
                 return Err(Error::msg(format!(
                     "Unknown instruction: {:02X}",
@@ -270,6 +282,7 @@ impl Device {
         Dump {
             pc: self.pc,
             acc: self.acc,
+            sp: self.sp,
             data_reg: self.data_reg.clone(),
             addr_reg: self.addr_reg.clone(),
             overflow: self.flags.overflow,
@@ -279,6 +292,16 @@ impl Device {
     #[allow(dead_code)]
     fn assert_mem(&self, addr: u16, value: u8) {
         assert_eq!(self.mem[addr as usize], value);
+    }
+
+    #[allow(dead_code)]
+    fn assert_sp(&self, value: u16) {
+        assert_eq!(self.sp, value);
+    }
+
+    #[allow(dead_code)]
+    fn assert_pc(&self, value: u16) {
+        assert_eq!(self.pc, value);
     }
 
     #[allow(dead_code)]
@@ -542,6 +565,50 @@ impl Device {
     fn jump(&mut self, addr: u16) {
         self.pc = addr;
     }
+
+    fn sp_add(&mut self, value: u8) {
+        self.sp = self.sp.saturating_sub(1);
+        self.mem[self.sp as usize] = value;
+    }
+
+    fn sp_remove(&mut self) -> u8 {
+        let value = self.mem[self.sp as usize];
+        self.sp = self.sp.saturating_add(1).min(SP_MAX);
+        value
+    }
+
+    fn stack_push(&mut self, value: u8) {
+        self.sp_add(value);
+        self.pc += 1;
+    }
+
+    fn stack_pop(&mut self, reg: u8) -> Result<()> {
+        let value = self.sp_remove();
+        match reg {
+            REG_ACC => self.acc = value,
+            REG_D0 => self.data_reg[0] = value,
+            REG_D1 => self.data_reg[1] = value,
+            REG_D2 => self.data_reg[2] = value,
+            REG_D3 => self.data_reg[3] = value,
+            _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
+        }
+        self.pc += 1;
+        Ok(())
+    }
+
+    fn stack_call(&mut self, addr: u16) {
+        let bytes = (self.pc.wrapping_add(1)).to_be_bytes();
+        self.pc = addr;
+        self.sp_add(bytes[0]);
+        self.sp_add(bytes[1]);
+    }
+
+    fn stack_return(&mut self) {
+        let mut bytes = [0; 2];
+        bytes[1] = self.sp_remove();
+        bytes[0] = self.sp_remove();
+        self.pc = u16::from_be_bytes(bytes);
+    }
 }
 
 fn addr(arr: &Instruction, start: usize) -> u16 {
@@ -770,5 +837,80 @@ mod test {
         device.execute([OP_DEC, REG_D2, 0]);
 
         device.assert_data_reg(REG_D2, 2);
+    }
+
+    #[test]
+    fn test_stack() {
+        let mut device = Device::new(vec![], vec![], None, StdoutPrinter::new());
+
+        device.assert_sp(SP_MAX);
+
+        device.execute([OP_PUSH_VAL, 25, 0]);
+
+        device.assert_mem(SP_MAX - 1, 25);
+        device.assert_sp(SP_MAX - 1);
+
+        device.execute([OP_POP_REG, REG_D2, 0]);
+
+        device.assert_mem(SP_MAX - 1, 25);
+        device.assert_sp(SP_MAX);
+        device.assert_data_reg(REG_D2, 25);
+
+        device.execute([OP_PUSH_VAL, 0xFF, 0]);
+        device.execute([OP_PUSH_VAL, 0xFE, 0]);
+        device.execute([OP_PUSH_VAL, 0xFD, 0]);
+        device.execute([OP_PUSH_VAL, 0xFC, 0]);
+        device.execute([OP_PUSH_VAL, 0xFB, 0]);
+        device.execute([OP_PUSH_VAL, 0xFA, 0]);
+
+        device.assert_mem(SP_MAX - 1, 0xFF);
+        device.assert_mem(SP_MAX - 2, 0xFE);
+        device.assert_mem(SP_MAX - 3, 0xFD);
+        device.assert_mem(SP_MAX - 4, 0xFC);
+        device.assert_mem(SP_MAX - 5, 0xFB);
+        device.assert_mem(SP_MAX - 6, 0xFA);
+        device.assert_sp(SP_MAX - 6);
+
+        device.execute([OP_POP_REG, REG_D2, 0]);
+        device.assert_sp(SP_MAX - 5);
+        device.assert_data_reg(REG_D2, 0xFA);
+
+        device.execute([OP_POP_REG, REG_D2, 0]);
+        device.assert_sp(SP_MAX - 4);
+        device.assert_data_reg(REG_D2, 0xFB);
+
+        device.execute([OP_POP_REG, REG_D2, 0]);
+        device.assert_sp(SP_MAX - 3);
+        device.assert_data_reg(REG_D2, 0xFC);
+
+        device.execute([OP_POP_REG, REG_D2, 0]);
+        device.assert_sp(SP_MAX - 2);
+        device.assert_data_reg(REG_D2, 0xFD);
+
+        device.execute([OP_POP_REG, REG_D2, 0]);
+        device.assert_sp(SP_MAX - 1);
+        device.assert_data_reg(REG_D2, 0xFE);
+
+        device.execute([OP_POP_REG, REG_D2, 0]);
+        device.assert_sp(SP_MAX);
+        device.assert_data_reg(REG_D2, 0xFF);
+
+        let mut device = Device::new(
+            vec![
+                [OP_CALL_ADDR, 0, 4],
+                [OP_CALL_ADDR, 0, 4],
+                [OP_PRINT_REG, REG_D0, 0],
+                [OP_HALT, 0, 0],
+                [OP_INC, REG_D0, 0],
+                [OP_RETURN, 0, 0],
+            ],
+            vec![],
+            None,
+            StdoutPrinter::new(),
+        );
+
+        device.run();
+        device.assert_pc(3);
+        device.assert_data_reg(REG_D0, 2);
     }
 }

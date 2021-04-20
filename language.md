@@ -120,6 +120,24 @@ Skip up to `reg` bytes in file, populates `ACC` with number of bytes actually sk
 
 Move file cursor to `[D3][D2][D1][D0]` (0..4294967295)
 
+### Stack
+
+`CALL addr_reg|label|addr`
+
+Jumps to address provided and pushes return address (pc + 1) to stack. Increments SP by 2 
+
+`RET`
+
+Pops last two bytes from stack and jumps to them. Decrements SP by 2
+
+`PUSH reg|num`
+
+Push value from register or number on to stack. Decrements SP by 1
+
+`POP reg`
+
+Pop value from stack and populates register. Increments SP by 1
+
 ### Misc
 
 `NOP`

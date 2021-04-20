@@ -47,9 +47,10 @@ impl<'a> Widget for StatusWidget<'a> {
             inner_area.x,
             inner_area.y,
             format!(
-                "ACC: {: >3} PC: {: >4} Overflowed: {}",
+                "ACC: {: >3} PC: {: >4} SP: {: >4} Overflowed: {}",
                 (self.formatter_8bit)(self.dump.acc),
                 (self.formatter_16bit)(self.dump.pc),
+                (self.formatter_16bit)(self.dump.sp),
                 self.dump.overflow
             ),
             Style::default(),

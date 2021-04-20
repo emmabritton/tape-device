@@ -107,6 +107,13 @@ pub mod code {
     pub const OP_LOAD_ADDR_HIGH_VAL: u8 = 0x62;
     pub const OP_LOAD_ADDR_LOW_VAL: u8 = 0x63;
 
+    pub const OP_CALL_ADDR: u8 = 0x70;
+    pub const OP_RETURN: u8 = 0x71;
+    pub const OP_PUSH_REG: u8 = 0x72;
+    pub const OP_POP_REG: u8 = 0x73;
+    pub const OP_PUSH_VAL: u8 = 0x74;
+    pub const OP_CALL_REG: u8 = 0x75;
+
     //No op
     //Used to mark empty lines/comments as PC = line num
     pub const OP_NOP: u8 = 0xFF;

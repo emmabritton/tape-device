@@ -48,9 +48,10 @@ pub(super) fn compile(
                         .filter(|chr| !(chr.is_alphanumeric() || chr == &'_'))
                         .count()
                         > 0
+                        && lbl.chars().next().map(|chr| chr.is_alphabetic()).is_some()
                     {
                         return Err(Error::msg(format!(
-                            "Invalid label: {} (must be [a-zA-Z0-9_]+)",
+                            "Invalid label: {} (must be [a-zA-Z][a-zA-Z0-9_]*)",
                             lbl
                         )));
                     }
@@ -306,6 +307,40 @@ fn decode(
         "halt" => {
             validate_len("HALT", parts.len(), 1)?;
             Ok([OP_HALT, 0, 0])
+        }
+        "call" => {
+            validate_len("CALL", parts.len(), 2)?;
+            if let Ok(addr_reg) = decode_addr_reg(parts[1], 1) {
+                Ok([OP_CALL_REG, addr_reg, 0])
+            } else if let Ok(num) = decode_addr(parts[1], 1) {
+                let bytes = num.to_be_bytes();
+                Ok([OP_CALL_ADDR, bytes[0], bytes[1]])
+            } else {
+                if labels.contains_key(parts[1]) {
+                    labels.get_mut(parts[1]).unwrap().1.push(pc);
+                } else {
+                    labels.insert(parts[1].to_string(), (None, vec![pc]));
+                }
+                Ok([OP_CALL_ADDR, 0, 0])
+            }
+        }
+        "ret" => {
+            validate_len("RET", parts.len(), 1)?;
+            Ok([OP_RETURN, 0, 0])
+        }
+        "push" => {
+            validate_len("PUSH", parts.len(), 2)?;
+            if let Ok(reg) = decode_reg(parts[1], 1) {
+                Ok([OP_PUSH_REG, reg, 0])
+            } else {
+                let num = parse_num(parts[1], 1)?;
+                Ok([OP_PUSH_VAL, num, 0])
+            }
+        }
+        "pop" => {
+            validate_len("POP", parts.len(), 2)?;
+            let reg = decode_reg(parts[1], 1)?;
+            Ok([OP_POP_REG, reg, 0])
         }
         _ => Err(Error::msg(format!("Unknown instruction: {}", parts[0]))),
     };
@@ -745,6 +780,60 @@ mod test {
             [OP_JNE, 0, 0]
         );
         assert!(decode("jne", pc, &map, &mut used_keys, &mut labels).is_err());
+
+        assert_eq!(
+            decode("push d0", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_PUSH_REG, REG_D0, 0]
+        );
+        assert_eq!(
+            decode("push 25", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_PUSH_VAL, 25, 0]
+        );
+        assert!(decode("push", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("push a0", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("push @1", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("push test", pc, &map, &mut used_keys, &mut labels).is_err());
+
+        assert_eq!(
+            decode("pop d3", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_POP_REG, REG_D3, 0]
+        );
+        assert!(decode("pop ", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("pop 25", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("pop  a0", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("pop  @1", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("pop  test", pc, &map, &mut used_keys, &mut labels).is_err());
+
+        assert_eq!(
+            decode("call lbl", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_CALL_ADDR, 0, 0]
+        );
+        assert_eq!(
+            decode("call @xABCD", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_CALL_ADDR, 0xAB, 0xCD]
+        );
+        assert_eq!(
+            decode("call A0", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_CALL_REG, REG_A0, 0]
+        );
+        assert_eq!(
+            decode("call 123", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_CALL_ADDR, 0, 0]
+        );
+        assert_eq!(
+            decode("call acc", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_CALL_ADDR, 0, 0]
+        );
+
+        assert_eq!(
+            decode("reT", pc, &map, &mut used_keys, &mut labels).unwrap(),
+            [OP_RETURN, 0, 0]
+        );
+        assert!(decode("ret d0", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("ret 25", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("ret  a0", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("ret  @1", pc, &map, &mut used_keys, &mut labels).is_err());
+        assert!(decode("ret  test", pc, &map, &mut used_keys, &mut labels).is_err());
 
         assert_eq!(
             decode("over tst", pc, &map, &mut used_keys, &mut labels).unwrap(),

@@ -20,6 +20,7 @@ pub struct Device {
     pc: u16,
     acc: u8,
     sp: u16,
+    fp: u16,
     data_reg: [u8; DATA_REG_SIZE],
     addr_reg: [u16; ADDR_REG_SIZE],
     file: Option<File>,
@@ -31,6 +32,7 @@ pub struct Dump {
     pub pc: u16,
     pub acc: u8,
     pub sp: u16,
+    pub fp: u16,
     pub data_reg: [u8; DATA_REG_SIZE],
     pub addr_reg: [u16; ADDR_REG_SIZE],
     pub overflow: bool,
@@ -58,6 +60,7 @@ impl Device {
             addr_reg: [0; ADDR_REG_SIZE],
             pc: 0,
             sp: SP_MAX,
+            fp: SP_MAX,
             breakpoints: vec![],
             tape_ops: ops,
             tape_data: data,
@@ -283,6 +286,7 @@ impl Device {
             pc: self.pc,
             acc: self.acc,
             sp: self.sp,
+            fp: self.fp,
             data_reg: self.data_reg.clone(),
             addr_reg: self.addr_reg.clone(),
             overflow: self.flags.overflow,
@@ -583,13 +587,12 @@ impl Device {
     }
 
     fn stack_pop(&mut self, reg: u8) -> Result<()> {
-        let value = self.sp_remove();
         match reg {
-            REG_ACC => self.acc = value,
-            REG_D0 => self.data_reg[0] = value,
-            REG_D1 => self.data_reg[1] = value,
-            REG_D2 => self.data_reg[2] = value,
-            REG_D3 => self.data_reg[3] = value,
+            REG_ACC => self.acc = self.sp_remove(),
+            REG_D0 => self.data_reg[0] = self.sp_remove(),
+            REG_D1 => self.data_reg[1] = self.sp_remove(),
+            REG_D2 => self.data_reg[2] = self.sp_remove(),
+            REG_D3 => self.data_reg[3] = self.sp_remove(),
             _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
         }
         self.pc += 1;
@@ -597,10 +600,16 @@ impl Device {
     }
 
     fn stack_call(&mut self, addr: u16) {
-        let bytes = (self.pc.wrapping_add(1)).to_be_bytes();
-        self.pc = addr;
+        let bytes = self.fp.to_be_bytes();
         self.sp_add(bytes[0]);
         self.sp_add(bytes[1]);
+
+        let bytes = (self.pc.wrapping_add(1)).to_be_bytes();
+        self.sp_add(bytes[0]);
+        self.sp_add(bytes[1]);
+
+        self.pc = addr;
+        self.fp = self.sp;
     }
 
     fn stack_return(&mut self) {
@@ -608,6 +617,14 @@ impl Device {
         bytes[1] = self.sp_remove();
         bytes[0] = self.sp_remove();
         self.pc = u16::from_be_bytes(bytes);
+
+        bytes[1] = self.sp_remove();
+        bytes[0] = self.sp_remove();
+        self.fp = u16::from_be_bytes(bytes);
+
+        while self.fp < self.sp {
+            self.sp_remove();
+        }
     }
 }
 

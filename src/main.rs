@@ -54,13 +54,38 @@ fn main() -> Result<()> {
             ),
         )
         .subcommand(
-            SubCommand::with_name("debug").arg(
-                Arg::with_name("tape")
-                    .help("Device tape to debug")
-                    .takes_value(true)
-                    .multiple(false)
-                    .required(true),
-            ),
+            SubCommand::with_name("debug")
+                .arg(
+                    Arg::with_name("tape")
+                        .help("Device tape to debug")
+                        .takes_value(true)
+                        .multiple(false)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("input")
+                        .help("Data tape for reading/writing")
+                        .takes_value(true)
+                        .multiple(false)
+                        .required(false),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("run")
+                .arg(
+                    Arg::with_name("tape")
+                        .help("Device tape to execute")
+                        .takes_value(true)
+                        .multiple(false)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("input")
+                        .help("Data tape for reading/writing")
+                        .takes_value(true)
+                        .multiple(false)
+                        .required(false),
+                ),
         )
         .arg(
             Arg::with_name("tape")
@@ -69,9 +94,18 @@ fn main() -> Result<()> {
                 .multiple(false)
                 .required(true),
         )
+        .arg(
+            Arg::with_name("input")
+                .help("Data tape for reading/writing")
+                .takes_value(true)
+                .multiple(false)
+                .required(false),
+        )
         .get_matches();
 
     if matches.is_present("tape") {
+        device::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;
+    } else if let Some(matches) = matches.subcommand_matches("run") {
         device::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;
     } else if let Some(matches) = matches.subcommand_matches("debug") {
         debugger::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;

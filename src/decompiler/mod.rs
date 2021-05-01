@@ -1,11 +1,12 @@
-use crate::common::Instruction;
 use crate::constants::code::*;
+use crate::constants::get_byte_count;
 use crate::constants::hardware::*;
 use crate::tape_reader::read_tape;
 use anyhow::Result;
+use std::collections::HashSet;
 
 pub struct Decoded {
-    pub bytes: Instruction,
+    pub bytes: Vec<u8>,
     pub strings: Vec<String>,
     pub line_num: usize,
     pub is_jump_target: bool,
@@ -13,7 +14,7 @@ pub struct Decoded {
 
 impl Decoded {
     pub fn new(
-        bytes: Instruction,
+        bytes: Vec<u8>,
         strings: Vec<String>,
         line_num: usize,
         is_jump_target: bool,
@@ -31,20 +32,21 @@ impl Decoded {
     pub fn is_param_16_bit(&self) -> bool {
         matches!(
             self.bytes[0],
-            OP_MEM_READ
-                | OP_MEM_WRITE
-                | OP_PRINT_MEM
-                | OP_PRINT_DAT
-                | OP_READ_FILE
-                | OP_WRITE_FILE
-                | OP_JMP
-                | OP_JE
-                | OP_JG
-                | OP_JNE
-                | OP_JL
-                | OP_OVERFLOW
-                | OP_NOT_OVERFLOW
-                | OP_CALL_ADDR
+            MEMR_ADDR
+                | MEMW_ADDR
+                | PRTD_STR
+                | FILER_ADDR
+                | FILEW_ADDR
+                | JMP_ADDR
+                | JE_ADDR
+                | JG_ADDR
+                | JNE_ADDR
+                | JL_ADDR
+                | OVER_ADDR
+                | NOVER_ADDR
+                | CALL_ADDR
+                | CPY_A0_ADDR
+                | CPY_A1_ADDR
         )
     }
 }
@@ -52,37 +54,73 @@ impl Decoded {
 pub fn start(path: &str) -> Result<()> {
     println!("Decompiling tape at {}", path);
 
-    let tape = read_tape(path)?;
+    let mut tape = read_tape(path)?;
 
     println!(
         "\n\nProgram\nName: {}\nVersion: {}",
         tape.name, tape.version
     );
-    println!("{} ops, {}b data", tape.ops.len(), tape.data.len());
+    let (strings, unused) = collect_strings(&tape.ops, &tape.data);
+
+    println!(
+        "{}b ops, {}b data ({}b indirectly referenced or unused)",
+        tape.ops.len(),
+        tape.data.len(),
+        unused
+    );
+    println!("\n\nStrings:");
+    for content in &strings {
+        println!("\"{}\"", content);
+    }
     println!("\n\nOps:");
     let jmp_target = collect_jump_targets(&tape.ops);
-    for (idx, op) in tape.ops.iter().enumerate() {
-        let op = decode(op, &tape.data, idx, jmp_target.contains(&idx));
+
+    let mut pc = 0;
+    while !tape.ops.is_empty() {
+        let op = decode(&mut tape.ops, &tape.data, pc, jmp_target.contains(&pc));
         let lbl = if op.is_jump_target {
             format!("{:04X}", op.line_num)
         } else {
             String::from("    ")
         };
         println!(
-            "{} {:<6}  {:<5}  {:<5}",
-            lbl, op.strings[0], op.strings[1], op.strings[2]
-        )
+            "{: <3} {} {:<6}  {:<5}  {:<5}",
+            pc, lbl, op.strings[0], op.strings[1], op.strings[2]
+        );
+        pc += get_byte_count(op.bytes[0]);
     }
 
     Ok(())
 }
 
-pub fn collect_jump_targets(ops: &Vec<Instruction>) -> Vec<usize> {
+pub fn collect_strings(ops: &Vec<u8>, data: &Vec<u8>) -> (Vec<String>, usize) {
+    let mut op_idx = 0;
+    let mut addresses = HashSet::new();
+    while op_idx < ops.len() {
+        if ops[op_idx] == PRTD_STR {
+            let addr = u16::from_be_bytes([ops[op_idx + 1], ops[op_idx + 2]]);
+            addresses.insert(addr);
+        }
+        op_idx += get_byte_count(ops[op_idx]);
+    }
+
+    let mut bytes_accounted = 0;
+    let mut results = vec![];
+    for str_addr in addresses {
+        bytes_accounted += data[str_addr as usize] as usize + 1;
+        let content = &data
+            [(str_addr + 1) as usize..(str_addr as usize + 1 + data[str_addr as usize] as usize)];
+        results.push(String::from_utf8_lossy(content).to_string());
+    }
+    (results, data.len() - bytes_accounted)
+}
+
+pub fn collect_jump_targets(ops: &Vec<u8>) -> Vec<usize> {
     let mut jmp_target = vec![];
-    for op in ops {
+    for op in ops.windows(3) {
         if matches!(
             op[0],
-            OP_JMP | OP_JE | OP_JNE | OP_JL | OP_JG | OP_OVERFLOW | OP_NOT_OVERFLOW
+            JMP_ADDR | JE_ADDR | JNE_ADDR | JL_ADDR | JG_ADDR | OVER_ADDR | NOVER_ADDR | CALL_ADDR
         ) {
             let addr = u16::from_be_bytes([op[1], op[2]]) as usize;
             jmp_target.push(addr);
@@ -91,61 +129,75 @@ pub fn collect_jump_targets(ops: &Vec<Instruction>) -> Vec<usize> {
     jmp_target
 }
 
-pub fn decode(op: &Instruction, strings: &[u8], line_num: usize, is_jump_target: bool) -> Decoded {
+pub fn decode(
+    bytes: &mut Vec<u8>,
+    strings: &[u8],
+    line_num: usize,
+    is_jump_target: bool,
+) -> Decoded {
+    let mut op = vec![];
+    let mut count = get_byte_count(bytes[0]);
+    while count > 0 {
+        op.push(bytes.remove(0));
+        count -= 1;
+    }
     let (op_str, p1_str, p2_str): (&str, String, String) = match op[0] {
-        OP_ADD_REG_VAL => ("ADD", decode_reg(op[1]), decode_num(op[2])),
-        OP_ADD_REG_REG => ("ADD", decode_reg(op[1]), decode_reg(op[2])),
-        OP_COPY_REG_VAL => ("CPY", decode_reg(op[1]), decode_num(op[2])),
-        OP_COPY_REG_REG => ("CPY", decode_reg(op[1]), decode_reg(op[2])),
-        OP_SUB_REG_VAL => ("SUB", decode_reg(op[1]), decode_num(op[2])),
-        OP_SUB_REG_REG => ("SUB", decode_reg(op[1]), decode_reg(op[2])),
-        OP_OPEN_FILE => ("FOPEN", String::new(), String::new()),
-        OP_PRINT_LN => ("PRTLN", String::new(), String::new()),
-        OP_INC => ("INC", decode_reg(op[1]), String::new()),
-        OP_DEC => ("DEC", decode_reg(op[1]), String::new()),
-        OP_PRINT_REG => ("PRT", decode_reg(op[1]), String::new()),
-        OP_SKIP_FILE => ("FSKIP", decode_reg(op[1]), String::new()),
-        OP_PRINT_VAL => ("PRT", decode_num(op[1]), String::new()),
-        OP_CMP_REG_VAL => ("CMP", decode_reg(op[1]), decode_num(op[2])),
-        OP_CMP_REG_REG => ("CMP", decode_reg(op[1]), decode_reg(op[2])),
-        OP_READ_FILE => ("FREAD", decode_addr(op[1], op[2]), String::new()),
-        OP_READ_FILE_REG => ("FREAD", decode_reg(op[1]), String::new()),
-        OP_WRITE_FILE => ("FWRITE", decode_addr(op[1], op[2]), String::new()),
-        OP_WRITE_FILE_REG => ("FWRITE", decode_reg(op[1]), String::new()),
-        OP_SEEK_FILE => ("FSEEK", String::new(), String::new()),
-        OP_MEM_READ => ("MEMR", decode_addr(op[1], op[2]), String::new()),
-        OP_MEM_READ_REG => ("MEMR", decode_reg(op[1]), String::new()),
-        OP_MEM_WRITE => ("MEMW", decode_addr(op[1], op[2]), String::new()),
-        OP_MEM_WRITE_REG => ("MEMW", decode_reg(op[1]), String::new()),
-        OP_PRINT_DAT => ("PRTD", decode_string(op[1], op[2], strings), String::new()),
-        OP_PRINT_MEM => ("PRT", decode_addr(op[1], op[2]), String::new()),
-        OP_JMP => ("JMP", decode_addr(op[1], op[2]), String::new()),
-        OP_JE => ("JE", decode_addr(op[1], op[2]), String::new()),
-        OP_JNE => ("JNE", decode_addr(op[1], op[2]), String::new()),
-        OP_JL => ("JL", decode_addr(op[1], op[2]), String::new()),
-        OP_JG => ("JG", decode_addr(op[1], op[2]), String::new()),
-        OP_OVERFLOW => ("OVER", decode_addr(op[1], op[2]), String::new()),
-        OP_NOT_OVERFLOW => ("NOVER", decode_addr(op[1], op[2]), String::new()),
-        OP_JMP_REG => ("JMP", decode_reg(op[1]), String::new()),
-        OP_JE_REG => ("JE", decode_reg(op[1]), String::new()),
-        OP_JNE_REG => ("JNE", decode_reg(op[1]), String::new()),
-        OP_JL_REG => ("JL", decode_reg(op[1]), String::new()),
-        OP_JG_REG => ("JG", decode_reg(op[1]), String::new()),
-        OP_OVERFLOW_REG => ("OVER", decode_reg(op[1]), String::new()),
-        OP_NOT_OVERFLOW_REG => ("NOVER", decode_reg(op[1]), String::new()),
-        OP_LOAD_ADDR_HIGH => ("ADDRH", decode_reg(op[1]), decode_reg(op[2])),
-        OP_LOAD_ADDR_LOW => ("ADDRL", decode_reg(op[1]), decode_reg(op[2])),
-        OP_LOAD_ADDR_HIGH_VAL => ("ADDRH", decode_reg(op[1]), decode_num(op[2])),
-        OP_LOAD_ADDR_LOW_VAL => ("ADDRL", decode_reg(op[1]), decode_num(op[2])),
-        OP_NOP => ("NOP", String::new(), String::new()),
-        OP_HALT => ("HALT", String::new(), String::new()),
-        OP_RETURN => ("RET", String::new(), String::new()),
-        OP_CALL_ADDR => ("CALL", decode_addr(op[1], op[2]), String::new()),
-        OP_CALL_REG => ("CALL", decode_reg(op[1]), String::new()),
-        OP_POP_REG => ("POP", decode_reg(op[1]), String::new()),
-        OP_PUSH_REG => ("PUSH", decode_reg(op[1]), String::new()),
-        OP_PUSH_VAL => ("PUSH", decode_num(op[1]), String::new()),
-        _ => ("", String::new(), String::new()),
+        ADD_REG_VAL => ("ADD", decode_reg(op[1]), decode_num(op[2])),
+        ADD_REG_REG => ("ADD", decode_reg(op[1]), decode_reg(op[2])),
+        CPY_REG_VAL => ("CPY", decode_reg(op[1]), decode_num(op[2])),
+        CPY_REG_REG => ("CPY", decode_reg(op[1]), decode_reg(op[2])),
+        SUB_REG_VAL => ("SUB", decode_reg(op[1]), decode_num(op[2])),
+        SUB_REG_REG => ("SUB", decode_reg(op[1]), decode_reg(op[2])),
+        FOPEN => ("FOPEN", String::new(), String::new()),
+        PRTLN => ("PRTLN", String::new(), String::new()),
+        INC_REG => ("INC", decode_reg(op[1]), String::new()),
+        DEC_REG => ("DEC", decode_reg(op[1]), String::new()),
+        FSKIP_REG => ("FSKIP", decode_reg(op[1]), String::new()),
+        PRT_VAL => ("PRT", decode_num(op[1]), String::new()),
+        PRT_REG => ("PRT", decode_reg(op[1]), String::new()),
+        CMP_REG_VAL => ("CMP", decode_reg(op[1]), decode_num(op[2])),
+        CMP_REG_REG => ("CMP", decode_reg(op[1]), decode_reg(op[2])),
+        FILER_ADDR => ("FILER", decode_addr(op[1], op[2]), String::new()),
+        FILER_AREG => ("FILER", decode_reg(op[1]), String::new()),
+        FILEW_ADDR => ("FILEW", decode_addr(op[1], op[2]), String::new()),
+        FILEW_AREG => ("FILEW", decode_reg(op[1]), String::new()),
+        FSEEK => ("FSEEK", String::new(), String::new()),
+        MEMR_ADDR => ("MEMR", decode_addr(op[1], op[2]), String::new()),
+        MEMR_AREG => ("MEMR", decode_reg(op[1]), String::new()),
+        MEMW_ADDR => ("MEMW", decode_addr(op[1], op[2]), String::new()),
+        MEMW_AREG => ("MEMW", decode_reg(op[1]), String::new()),
+        PRTD_STR => ("PRTD", decode_string(op[1], op[2], strings), String::new()),
+        JMP_ADDR => ("JMP", decode_addr(op[1], op[2]), String::new()),
+        JE_ADDR => ("JE", decode_addr(op[1], op[2]), String::new()),
+        JNE_ADDR => ("JNE", decode_addr(op[1], op[2]), String::new()),
+        JL_ADDR => ("JL", decode_addr(op[1], op[2]), String::new()),
+        JG_ADDR => ("JG", decode_addr(op[1], op[2]), String::new()),
+        OVER_ADDR => ("OVER", decode_addr(op[1], op[2]), String::new()),
+        NOVER_ADDR => ("NOVER", decode_addr(op[1], op[2]), String::new()),
+        JMP_AREG => ("JMP", decode_reg(op[1]), String::new()),
+        JE_AREG => ("JE", decode_reg(op[1]), String::new()),
+        JNE_AREG => ("JNE", decode_reg(op[1]), String::new()),
+        JL_AREG => ("JL", decode_reg(op[1]), String::new()),
+        JG_AREG => ("JG", decode_reg(op[1]), String::new()),
+        OVER_AREG => ("OVER", decode_reg(op[1]), String::new()),
+        NOVER_AREG => ("NOVER", decode_reg(op[1]), String::new()),
+        NOP => ("NOP", String::new(), String::new()),
+        HALT => ("HALT", String::new(), String::new()),
+        RET => ("RET", String::new(), String::new()),
+        CALL_ADDR => ("CALL", decode_addr(op[1], op[2]), String::new()),
+        CALL_AREG => ("CALL", decode_reg(op[1]), String::new()),
+        POP_REG => ("POP", decode_reg(op[1]), String::new()),
+        PUSH_REG => ("PUSH", decode_reg(op[1]), String::new()),
+        PUSH_VAL => ("PUSH", decode_num(op[1]), String::new()),
+        SWPAR => ("SWPAR", String::new(), String::new()),
+        CMPAR => ("CMPAR", String::new(), String::new()),
+        CPY_A0_REG_REG => ("CPYA0", decode_reg(op[1]), decode_reg(op[2])),
+        CPY_A0_ADDR => ("CPYA0", decode_addr(op[1], op[2]), String::new()),
+        CPY_A1_REG_REG => ("CPYA1", decode_reg(op[1]), decode_reg(op[2])),
+        CPY_A1_ADDR => ("CPYA1", decode_addr(op[1], op[2]), String::new()),
+        LDA0_REG_REG => ("LDA0", decode_reg(op[1]), decode_reg(op[2])),
+        LDA1_REG_REG => ("LDA1", decode_reg(op[1]), decode_reg(op[2])),
+        _ => ("???", String::new(), String::new()),
     };
     Decoded::new(
         op.clone(),
@@ -165,7 +217,7 @@ fn decode_string(b1: u8, b2: u8, data: &[u8]) -> String {
     }
     String::from_utf8(output)
         .map(|str| format!("\"{}\"", str))
-        .unwrap_or_else(|_| String::from("Unable to decode string"))
+        .unwrap_or_else(|_| format!("Unable to decode string (address was {})", addr))
 }
 
 fn decode_addr(b1: u8, b2: u8) -> String {

@@ -4,9 +4,12 @@ Language for fictional computer with no screen or input devices that executes pr
 
 ### Device
 
-- Registers: ACC, D0, D1, D2, D3, A0, A1
+- Registers: 
+  - Special: ACC (Accumlator)
+  - 8 bit: D0, D1, D2, D3
+  - 16 bit: A0, A1
 - RAM: 65,535 bytes
-- Max program length: 21,845 instructions
+- Max program length: 65,535 bytes
 - Max string data: 65,535 bytes (max length per string: 255 bytes)
 
 ## Info
@@ -28,9 +31,9 @@ Prints `3`
 tape-device program.tape <input>
 ```
 
-**Compile program**
+**Assemble program**
 ```
-tape-device compile program.tasm data.dat
+tape-device assemble program.tasm
 ```
 
 **Decompile program**
@@ -38,7 +41,7 @@ tape-device compile program.tasm data.dat
 tape-device decompile program.tape
 ```
 
-**Debug program** (Must be run from command line)
+**Debug program** (Must be run from a terminal)
 ```
 tape-device debug program.tape <input>
 ```

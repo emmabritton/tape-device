@@ -1,5 +1,11 @@
 FizzBuzz
 1.0
+.strings
+fizz=Fizz
+buzz=Buzz
+colon=:
+
+.ops
 
 start:			INC D0
 				PRT D0

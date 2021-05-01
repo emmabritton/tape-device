@@ -1,7 +1,6 @@
-use crate::common::Instruction;
 use crate::constants::code::*;
-use crate::constants::compare;
 use crate::constants::hardware::*;
+use crate::constants::{compare, get_byte_count, is_jump_op};
 use crate::device::internals::RunResult::{Breakpoint, EoF, ProgError};
 use crate::printer::{Printer, RcBox};
 use anyhow::{Error, Result};
@@ -13,7 +12,7 @@ const SP_MAX: u16 = u16::MAX;
 
 pub struct Device {
     mem: [u8; RAM_SIZE],
-    tape_ops: Vec<Instruction>,
+    tape_ops: Vec<u8>,
     tape_data: Vec<u8>,
     input_data: Option<String>,
     flags: Flags,
@@ -47,7 +46,7 @@ pub enum RunResult {
 
 impl Device {
     pub fn new(
-        ops: Vec<Instruction>,
+        ops: Vec<u8>,
         data: Vec<u8>,
         input_file: Option<String>,
         printer: RcBox<dyn Printer>,
@@ -96,7 +95,7 @@ impl Device {
         if self.pc as usize >= self.tape_ops.len() {
             panic!("Tried to execute EoF")
         }
-        self.execute(self.tape_ops[self.pc as usize])
+        self.execute()
     }
 
     fn log(&mut self, msg: &str) {
@@ -122,44 +121,25 @@ impl Device {
             .collect();
     }
 
-    fn execute(&mut self, instruction: Instruction) -> bool {
-        return match self.try_execute(instruction) {
+    fn execute(&mut self) -> bool {
+        return match self.try_execute() {
             Ok(continue_running) => continue_running,
             Err(err) => {
-                self.elog(&format!("\nFatal error at line {}:", self.pc + 1));
+                self.elog(&format!("\nFatal error at byte {}:", self.pc));
                 self.elog(&format!("{}", err));
                 self.elog(&format!("\nInstructions:"));
-                for i in self.pc.saturating_sub(2)..self.pc {
-                    self.elog(&format!(
-                        "{:4}   {:02X} {:02X} {:02X}",
-                        i + 1,
-                        self.tape_ops[i as usize][0],
-                        self.tape_ops[i as usize][1],
-                        self.tape_ops[i as usize][2]
-                    ));
+                let mut output = String::new();
+                let mut idx = 0;
+                let start = self.pc.saturating_sub(9);
+                let end = self.pc.saturating_add(9).min(self.tape_ops.len() as u16);
+                for i in start..end {
+                    output.push_str(&format!("{:02X} ", self.tape_ops[i as usize]));
+                    if i < self.pc {
+                        idx += 3;
+                    }
                 }
-                self.elog(&format!(
-                    "{:4} > {:02X} {:02X} {:02X} <",
-                    self.pc + 1,
-                    instruction[0],
-                    instruction[1],
-                    instruction[2]
-                ));
-                for i in (self.pc as usize)
-                    .saturating_add(1)
-                    .min(self.tape_ops.len())
-                    ..(self.pc as usize)
-                        .saturating_add(3)
-                        .min(self.tape_ops.len())
-                {
-                    self.elog(&format!(
-                        "{:4}   {:02X} {:02X} {:02X}",
-                        i + 1,
-                        self.tape_ops[i as usize][0],
-                        self.tape_ops[i as usize][1],
-                        self.tape_ops[i as usize][2]
-                    ));
-                }
+                self.elog(&output);
+                self.elog(&format!("{1: >0$}", idx + 2, "^^"));
                 let dump = self.dump();
                 self.elog(&format!("\nDump:"));
                 self.elog(&format!(
@@ -177,105 +157,184 @@ impl Device {
         };
     }
 
-    fn cond_jump(&mut self, should_jump: bool, addr: u16) {
+    fn cond_jump(&mut self, should_jump: bool, addr: u16, from_areg: bool) {
         if should_jump {
             self.jump(addr)
         } else {
-            self.pc += 1;
+            if from_areg {
+                self.pc += 2;
+            } else {
+                self.pc += 3;
+            }
         }
     }
 
-    fn try_execute(&mut self, instruction: Instruction) -> Result<bool> {
-        match instruction[0] {
-            OP_NOP => self.pc += 1,
-            OP_ADD_REG_REG => {
-                self.add(self.get_reg(instruction[1])?, self.get_reg(instruction[2])?)
-            }
-            OP_ADD_REG_VAL => self.add(self.get_reg(instruction[1])?, instruction[2]),
-            OP_SUB_REG_REG => {
-                self.sub(self.get_reg(instruction[1])?, self.get_reg(instruction[2])?)
-            }
-            OP_SUB_REG_VAL => self.sub(self.get_reg(instruction[1])?, instruction[2]),
-            OP_COPY_REG_VAL => self.load(instruction[1], instruction[2])?,
-            OP_MEM_READ => self.load(REG_ACC, self.get_mem(addr(&instruction, 1)))?,
-            OP_MEM_READ_REG => {
-                self.load(REG_ACC, self.get_mem(self.get_addr_reg(instruction[1])?))?
-            }
-            OP_COPY_REG_REG => self.load(instruction[1], self.get_reg(instruction[2])?)?,
-            OP_MEM_WRITE => self.store(addr(&instruction, 1)),
-            OP_MEM_WRITE_REG => self.store(self.get_addr_reg(instruction[1])?),
-            OP_JMP_REG => self.jump(self.get_addr_reg(instruction[1])?),
-            OP_JE_REG => self.cond_jump(
+    fn try_execute(&mut self) -> Result<bool> {
+        let idx = self.pc as usize;
+        let op = self.tape_ops[idx];
+        match op {
+            NOP => {}
+            ADD_REG_REG => self.add(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            ),
+            ADD_REG_VAL => self.add(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.tape_ops[idx + 2],
+            ),
+            SUB_REG_REG => self.sub(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            ),
+            SUB_REG_VAL => self.sub(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.tape_ops[idx + 2],
+            ),
+            CPY_REG_VAL => self.load(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
+            MEMR_ADDR => self.load(
+                REG_ACC,
+                self.get_mem(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
+            )?,
+            MEMR_AREG => self.load(
+                REG_ACC,
+                self.get_mem(self.get_addr_reg(self.tape_ops[idx + 1])?),
+            )?,
+            CPY_REG_REG => self.load(
+                self.tape_ops[idx + 1],
+                self.get_reg(self.tape_ops[idx + 2])?,
+            )?,
+            MEMW_ADDR => self.store(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
+            MEMW_AREG => self.store(self.get_addr_reg(self.tape_ops[idx + 1])?),
+            JMP_AREG => self.jump(self.get_addr_reg(self.tape_ops[idx + 1])?),
+            JE_AREG => self.cond_jump(
                 self.acc == compare::EQUAL,
-                self.get_addr_reg(instruction[1])?,
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                true,
             ),
-            OP_JL_REG => self.cond_jump(
+            JL_AREG => self.cond_jump(
                 self.acc == compare::LESSER,
-                self.get_addr_reg(instruction[1])?,
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                true,
             ),
-            OP_JG_REG => self.cond_jump(
+            JG_AREG => self.cond_jump(
                 self.acc == compare::GREATER,
-                self.get_addr_reg(instruction[1])?,
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                true,
             ),
-            OP_JNE_REG => self.cond_jump(
+            JNE_AREG => self.cond_jump(
                 self.acc != compare::EQUAL,
-                self.get_addr_reg(instruction[1])?,
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                true,
             ),
-            OP_OVERFLOW_REG => {
-                self.cond_jump(self.flags.overflow, self.get_addr_reg(instruction[1])?)
-            }
-            OP_NOT_OVERFLOW_REG => {
-                self.cond_jump(!self.flags.overflow, self.get_addr_reg(instruction[1])?)
-            }
-            OP_LOAD_ADDR_HIGH => {
-                self.set_addr_reg(instruction[1], self.get_reg(instruction[2])?, true)?
-            }
-            OP_LOAD_ADDR_LOW => {
-                self.set_addr_reg(instruction[1], self.get_reg(instruction[2])?, false)?
-            }
-            OP_LOAD_ADDR_HIGH_VAL => self.set_addr_reg(instruction[1], instruction[2], true)?,
-            OP_LOAD_ADDR_LOW_VAL => self.set_addr_reg(instruction[1], instruction[2], false)?,
-            OP_JMP => self.jump(addr(&instruction, 1)),
-            OP_JE => self.cond_jump(self.acc == compare::EQUAL, addr(&instruction, 1)),
-            OP_JL => self.cond_jump(self.acc == compare::LESSER, addr(&instruction, 1)),
-            OP_JG => self.cond_jump(self.acc == compare::GREATER, addr(&instruction, 1)),
-            OP_JNE => self.cond_jump(self.acc != compare::EQUAL, addr(&instruction, 1)),
-            OP_OVERFLOW => self.cond_jump(self.flags.overflow, addr(&instruction, 1)),
-            OP_NOT_OVERFLOW => self.cond_jump(!self.flags.overflow, addr(&instruction, 1)),
-            OP_INC => self.change(instruction[1], 1)?,
-            OP_DEC => self.change(instruction[1], -1)?,
-            OP_CMP_REG_REG => {
-                self.compare(self.get_reg(instruction[1])?, self.get_reg(instruction[2])?)
-            }
-            OP_CMP_REG_VAL => self.compare(self.get_reg(instruction[1])?, instruction[2]),
-            OP_PRINT_REG => self.print(self.get_reg(instruction[1])?),
-            OP_PRINT_VAL => self.print(instruction[1]),
-            OP_PRINT_LN => {
+            OVER_AREG => self.cond_jump(
+                self.flags.overflow,
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                true,
+            ),
+            NOVER_AREG => self.cond_jump(
+                !self.flags.overflow,
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                true,
+            ),
+            JMP_ADDR => self.jump(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
+            JE_ADDR => self.cond_jump(
+                self.acc == compare::EQUAL,
+                addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
+                false,
+            ),
+            JL_ADDR => self.cond_jump(
+                self.acc == compare::LESSER,
+                addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
+                false,
+            ),
+            JG_ADDR => self.cond_jump(
+                self.acc == compare::GREATER,
+                addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
+                false,
+            ),
+            JNE_ADDR => self.cond_jump(
+                self.acc != compare::EQUAL,
+                addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
+                false,
+            ),
+            OVER_ADDR => self.cond_jump(
+                self.flags.overflow,
+                addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
+                false,
+            ),
+            NOVER_ADDR => self.cond_jump(
+                !self.flags.overflow,
+                addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
+                false,
+            ),
+            INC_REG => self.change(self.tape_ops[idx + 1], 1)?,
+            DEC_REG => self.change(self.tape_ops[idx + 1], -1)?,
+            CMP_REG_REG => self.compare(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            ),
+            CMP_REG_VAL => self.compare(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.tape_ops[idx + 2],
+            ),
+            PRT_REG => self.print(self.get_reg(self.tape_ops[idx + 1])?),
+            PRT_VAL => self.print(self.tape_ops[idx + 1]),
+            PRTC_REG => self.printc(self.get_reg(self.tape_ops[idx + 1])?),
+            PRTC_VAL => self.printc(self.tape_ops[idx + 1]),
+            PRTLN => {
                 self.printer.borrow_mut().newline();
-                self.pc += 1;
             }
-            OP_PRINT_DAT => self.print_dat(addr(&instruction, 1)),
-            OP_PRINT_MEM => self.print_mem(addr(&instruction, 1)),
-            OP_OPEN_FILE => self.open_file()?,
-            OP_READ_FILE => self.read_file(addr(&instruction, 1))?,
-            OP_READ_FILE_REG => self.read_file(self.get_addr_reg(instruction[1])?)?,
-            OP_WRITE_FILE_REG => self.write_file(self.get_addr_reg(instruction[1])?)?,
-            OP_WRITE_FILE => self.write_file(addr(&instruction, 1))?,
-            OP_SEEK_FILE => self.seek_file()?,
-            OP_SKIP_FILE => self.skip_file(self.get_reg(instruction[1])?)?,
-            OP_HALT => return Ok(false),
-            OP_PUSH_VAL => self.stack_push(instruction[1]),
-            OP_PUSH_REG => self.stack_push(self.get_reg(instruction[1])?),
-            OP_POP_REG => self.stack_pop(instruction[1])?,
-            OP_RETURN => self.stack_return(),
-            OP_CALL_ADDR => self.stack_call(addr(&instruction, 1)),
-            OP_CALL_REG => self.stack_call(self.get_addr_reg(instruction[1])?),
+            PRTD_STR => self.print_dat(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
+            FOPEN => self.open_file()?,
+            FILER_ADDR => self.read_file(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
+            FILER_AREG => self.read_file(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
+            FILEW_AREG => self.write_file(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
+            FILEW_ADDR => self.write_file(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
+            FSEEK => self.seek_file()?,
+            FSKIP_REG => self.skip_file(self.get_reg(self.tape_ops[idx + 1])?)?,
+            HALT => return Ok(false),
+            PUSH_VAL => self.stack_push(self.tape_ops[idx + 1]),
+            PUSH_REG => self.stack_push_reg(self.tape_ops[idx + 1])?,
+            POP_REG => self.stack_pop(self.tape_ops[idx + 1])?,
+            RET => self.stack_return(),
+            CALL_ADDR => self.stack_call(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
+            CALL_AREG => self.stack_call(self.get_addr_reg(self.tape_ops[idx + 1])?),
+            SWPAR => self.swap_addr_reg(),
+            CMPAR => self.cmp_addr_reg(),
+            LDA0_REG_REG => self.load_addr_reg(
+                REG_A0,
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            )?,
+            LDA1_REG_REG => self.load_addr_reg(
+                REG_A1,
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            )?,
+            CPY_A0_REG_REG => self.copy_addr_reg(
+                REG_A0,
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            )?,
+            CPY_A1_REG_REG => self.copy_addr_reg(
+                REG_A1,
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            )?,
+            CPY_A0_ADDR => self
+                .copy_addr_reg_val(REG_A0, addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
+            CPY_A1_ADDR => self
+                .copy_addr_reg_val(REG_A0, addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
             _ => {
                 return Err(Error::msg(format!(
                     "Unknown instruction: {:02X}",
-                    instruction[0]
+                    self.tape_ops[idx]
                 )))
             }
+        }
+        if !is_jump_op(self.tape_ops[idx]) {
+            let op_size = get_byte_count(self.tape_ops[idx]) as u16;
+            self.pc += op_size;
         }
         Ok(true)
     }
@@ -345,19 +404,82 @@ impl Device {
 
     //Operations
 
-    fn set_addr_reg(&mut self, addr_reg: u8, value: u8, high_byte: bool) -> Result<()> {
-        let mut current_bytes = self.get_addr_reg(addr_reg)?.to_be_bytes();
-        if high_byte {
-            current_bytes[0] = value;
-        } else {
-            current_bytes[1] = value;
+    fn load_addr_reg(&mut self, addr_reg: u8, reg1: u8, reg2: u8) -> Result<()> {
+        let bytes = match addr_reg {
+            REG_A0 => self.addr_reg[0],
+            REG_A1 => self.addr_reg[1],
+            _ => {
+                return Err(Error::msg(format!(
+                    "Invalid addr register: {:02X}",
+                    addr_reg
+                )))
+            }
         }
+        .to_be_bytes();
+        match reg1 {
+            REG_ACC => self.acc = bytes[0],
+            REG_D0 => self.data_reg[0] = bytes[0],
+            REG_D1 => self.data_reg[1] = bytes[0],
+            REG_D2 => self.data_reg[2] = bytes[0],
+            REG_D3 => self.data_reg[3] = bytes[0],
+            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg1))),
+        }
+        match reg2 {
+            REG_ACC => self.acc = bytes[1],
+            REG_D0 => self.data_reg[0] = bytes[1],
+            REG_D1 => self.data_reg[1] = bytes[1],
+            REG_D2 => self.data_reg[2] = bytes[1],
+            REG_D3 => self.data_reg[3] = bytes[1],
+            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg2))),
+        }
+
+        Ok(())
+    }
+
+    fn copy_addr_reg(&mut self, addr_reg: u8, reg1: u8, reg2: u8) -> Result<()> {
+        let byte0 = match reg1 {
+            REG_ACC => self.acc,
+            REG_D0 => self.data_reg[0],
+            REG_D1 => self.data_reg[1],
+            REG_D2 => self.data_reg[2],
+            REG_D3 => self.data_reg[3],
+            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg1))),
+        };
+        let byte1 = match reg2 {
+            REG_ACC => self.acc,
+            REG_D0 => self.data_reg[0],
+            REG_D1 => self.data_reg[1],
+            REG_D2 => self.data_reg[2],
+            REG_D3 => self.data_reg[3],
+            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg2))),
+        };
+        let addr = u16::from_be_bytes([byte0, byte1]);
         match addr_reg {
-            REG_A0 => self.addr_reg[0] = u16::from_be_bytes(current_bytes),
-            REG_A1 => self.addr_reg[1] = u16::from_be_bytes(current_bytes),
-            _ => panic!("Impossible"),
+            REG_A0 => self.addr_reg[0] = addr,
+            REG_A1 => self.addr_reg[1] = addr,
+            _ => {
+                return Err(Error::msg(format!(
+                    "Invalid addr register: {:02X}",
+                    addr_reg
+                )))
+            }
         }
-        self.pc += 1;
+
+        Ok(())
+    }
+
+    fn copy_addr_reg_val(&mut self, addr_reg: u8, addr: u16) -> Result<()> {
+        match addr_reg {
+            REG_A0 => self.addr_reg[0] = addr,
+            REG_A1 => self.addr_reg[1] = addr,
+            _ => {
+                return Err(Error::msg(format!(
+                    "Invalid addr register: {:02X}",
+                    addr_reg
+                )))
+            }
+        }
+
         Ok(())
     }
 
@@ -381,7 +503,7 @@ impl Device {
             file.seek(SeekFrom::Start(0))
                 .expect("Unable to reset file cursor");
             self.file = Some(file);
-            self.pc += 1;
+
             Ok(())
         } else {
             Err(Error::msg("No input file path set"))
@@ -403,10 +525,7 @@ impl Device {
                     self.data_reg[3],
                 ]);
                 match file.seek(SeekFrom::Start(addr)) {
-                    Ok(_) => {
-                        self.pc += 1;
-                        Ok(())
-                    }
+                    Ok(_) => Ok(()),
                     Err(err) => Err(Error::from(err)),
                 }
             }
@@ -426,7 +545,7 @@ impl Device {
                             self.mem[mem_addr] = buffer[i];
                         }
                         self.acc = count as u8;
-                        self.pc += 1;
+
                         Ok(())
                     }
                     Err(err) => Err(Error::from(err)),
@@ -443,7 +562,7 @@ impl Device {
                 match file.write(buffer) {
                     Ok(count) => {
                         self.acc = count as u8;
-                        self.pc += 1;
+
                         file.flush()?;
                         Ok(())
                     }
@@ -461,7 +580,7 @@ impl Device {
                 match file.read(&mut buffer) {
                     Ok(count) => {
                         self.acc = count as u8;
-                        self.pc += 1;
+
                         Ok(())
                     }
                     Err(err) => Err(Error::from(err)),
@@ -472,7 +591,6 @@ impl Device {
 
     fn print(&mut self, val: u8) {
         self.log(&format!("{}", val));
-        self.pc += 1;
     }
 
     fn print_dat(&mut self, data_addr: u16) {
@@ -482,18 +600,16 @@ impl Device {
             let chr_addr = str_start + i;
             self.log(&format!("{}", self.tape_data[chr_addr] as char));
         }
-        self.pc += 1;
     }
 
-    fn print_mem(&mut self, addr: u16) {
-        let initial = self.acc as usize;
-        while self.acc > 0 {
-            let chr = self.mem[addr as usize + (initial - self.acc as usize)] as char;
-            self.log(&format!("{}", chr));
-            self.acc -= 1;
-        }
-        self.acc = initial as u8;
-        self.pc += 1;
+    fn printc(&mut self, val: u8) {
+        self.log(&format!("{}", val as char));
+    }
+
+    fn swap_addr_reg(&mut self) {
+        let a1 = self.addr_reg[1];
+        self.addr_reg[1] = self.addr_reg[0];
+        self.addr_reg[0] = a1;
     }
 
     fn change(&mut self, id: u8, diff: isize) -> Result<()> {
@@ -521,8 +637,16 @@ impl Device {
             REG_A1 => (self.addr_reg[1], self.flags.overflow) = update16(self.addr_reg[1]),
             _ => return Err(Error::msg(format!("Invalid register: {:02X}", id))),
         }
-        self.pc += 1;
+
         Ok(())
+    }
+
+    fn cmp_addr_reg(&mut self) {
+        match self.addr_reg[0].cmp(&self.addr_reg[1]) {
+            Ordering::Less => self.acc = compare::LESSER,
+            Ordering::Equal => self.acc = compare::EQUAL,
+            Ordering::Greater => self.acc = compare::GREATER,
+        }
     }
 
     fn compare(&mut self, lhs: u8, rhs: u8) {
@@ -531,21 +655,18 @@ impl Device {
             Ordering::Equal => self.acc = compare::EQUAL,
             Ordering::Greater => self.acc = compare::GREATER,
         }
-        self.pc += 1;
     }
 
     fn add(&mut self, lhs: u8, rhs: u8) {
         let (value, overflowed) = lhs.overflowing_add(rhs);
         self.flags.overflow = overflowed;
         self.acc = value;
-        self.pc += 1;
     }
 
     fn sub(&mut self, lhs: u8, rhs: u8) {
         let (value, overflowed) = lhs.overflowing_sub(rhs);
         self.flags.overflow = overflowed;
         self.acc = value;
-        self.pc += 1;
     }
 
     fn load(&mut self, dest: u8, value: u8) -> Result<()> {
@@ -557,13 +678,11 @@ impl Device {
             REG_D3 => self.data_reg[3] = value,
             _ => return Err(Error::msg(format!("Invalid register: {:02X}", dest))),
         }
-        self.pc += 1;
         Ok(())
     }
 
     fn store(&mut self, addr: u16) {
         self.mem[addr as usize] = self.acc;
-        self.pc += 1;
     }
 
     fn jump(&mut self, addr: u16) {
@@ -583,7 +702,26 @@ impl Device {
 
     fn stack_push(&mut self, value: u8) {
         self.sp_add(value);
-        self.pc += 1;
+    }
+
+    fn stack_push_reg(&mut self, reg: u8) -> Result<()> {
+        if matches!(reg, REG_ACC | REG_D0 | REG_D1 | REG_D2 | REG_D3) {
+            self.stack_push(self.get_reg(reg)?);
+        } else {
+            if reg == REG_A0 {
+                let bytes = self.addr_reg[0].to_be_bytes();
+                self.sp_add(bytes[0]);
+                self.sp_add(bytes[1]);
+            } else if reg == REG_A1 {
+                let bytes = self.addr_reg[1].to_be_bytes();
+                self.sp_add(bytes[0]);
+                self.sp_add(bytes[1]);
+            } else {
+                return Err(Error::msg(format!("Invalid register: {:02X}", reg)));
+            }
+        }
+
+        Ok(())
     }
 
     fn stack_pop(&mut self, reg: u8) -> Result<()> {
@@ -593,9 +731,11 @@ impl Device {
             REG_D1 => self.data_reg[1] = self.sp_remove(),
             REG_D2 => self.data_reg[2] = self.sp_remove(),
             REG_D3 => self.data_reg[3] = self.sp_remove(),
+            REG_A0 => self.addr_reg[0] = u16::from_be_bytes([self.sp_remove(), self.sp_remove()]),
+            REG_A1 => self.addr_reg[1] = u16::from_be_bytes([self.sp_remove(), self.sp_remove()]),
             _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
         }
-        self.pc += 1;
+
         Ok(())
     }
 
@@ -604,7 +744,7 @@ impl Device {
         self.sp_add(bytes[0]);
         self.sp_add(bytes[1]);
 
-        let bytes = (self.pc.wrapping_add(1)).to_be_bytes();
+        let bytes = (self.pc.wrapping_add(3)).to_be_bytes();
         self.sp_add(bytes[0]);
         self.sp_add(bytes[1]);
 
@@ -628,8 +768,8 @@ impl Device {
     }
 }
 
-fn addr(arr: &Instruction, start: usize) -> u16 {
-    u16::from_be_bytes([arr[start], arr[start + 1]])
+fn addr(byte1: u8, byte2: u8) -> u16 {
+    u16::from_be_bytes([byte1, byte2])
 }
 
 #[cfg(test)]
@@ -695,7 +835,7 @@ mod test {
                 [OP_COPY_REG_VAL, REG_D0, 10],
                 [OP_COPY_REG_VAL, REG_D2, 20],
                 [OP_COPY_REG_VAL, REG_D3, 30],
-                [OP_ADD_REG_REG, REG_D0, REG_D1],
+                [ADD_REG_REG, REG_D0, REG_D1],
             ],
             vec![],
             None,
@@ -726,7 +866,7 @@ mod test {
         let mut device = Device::new(
             vec![
                 [OP_COPY_REG_VAL, REG_D1, 3],
-                [OP_SUB_REG_VAL, REG_D1, 3],
+                [SUB_REG_VAL, REG_D1, 3],
                 [OP_COPY_REG_REG, REG_D1, REG_ACC],
                 [OP_CMP_REG_VAL, REG_D1, 0],
                 [OP_JE, 0, 6],
@@ -747,7 +887,7 @@ mod test {
         let mut device = Device::new(
             vec![
                 [OP_COPY_REG_VAL, REG_D0, 0],
-                [OP_INC, REG_D0, 0],
+                [INC, REG_D0, 0],
                 [OP_CMP_REG_VAL, REG_D0, 5],
                 [OP_JNE, 0, 1],
             ],
@@ -829,29 +969,29 @@ mod test {
 
         device.execute([OP_COPY_REG_VAL, REG_D2, 0x04]);
         device.execute([OP_COPY_REG_VAL, REG_D3, 0x04]);
-        device.execute([OP_ADD_REG_REG, REG_D2, REG_D3]);
+        device.execute([ADD_REG_REG, REG_D2, REG_D3]);
 
         device.execute([OP_MEM_WRITE, 0x12, 0x34]);
 
         device.assert_mem(0x1234, 8);
 
-        device.execute([OP_SUB_REG_REG, REG_ACC, REG_D3]);
+        device.execute([SUB_REG_REG, REG_ACC, REG_D3]);
 
         device.assert_data_reg(REG_ACC, 4);
         device.assert_data_reg(REG_D2, 4);
         device.assert_data_reg(REG_D3, 4);
 
         device.execute([OP_COPY_REG_VAL, REG_D0, 10]);
-        device.execute([OP_ADD_REG_VAL, REG_D0, 10]);
+        device.execute([ADD_REG_VAL, REG_D0, 10]);
 
         device.assert_data_reg(REG_ACC, 20);
 
-        device.execute([OP_INC, REG_ACC, 0]);
+        device.execute([INC, REG_ACC, 0]);
 
         device.assert_data_reg(REG_ACC, 21);
 
-        device.execute([OP_DEC, REG_D2, 0]);
-        device.execute([OP_DEC, REG_D2, 0]);
+        device.execute([DEC, REG_D2, 0]);
+        device.execute([DEC, REG_D2, 0]);
 
         device.assert_data_reg(REG_D2, 2);
     }
@@ -918,7 +1058,7 @@ mod test {
                 [OP_CALL_ADDR, 0, 4],
                 [OP_PRINT_REG, REG_D0, 0],
                 [OP_HALT, 0, 0],
-                [OP_INC, REG_D0, 0],
+                [INC, REG_D0, 0],
                 [OP_RETURN, 0, 0],
             ],
             vec![],

@@ -2,13 +2,16 @@
 
 ## Assembly
 
+* Mnemonics and registers are case insensitive
+* Device is big endian
+
 #### Params 
 
 - `data_reg`: `acc`, `d0`, `d1`, `d2`, `d3`
 - `addr_reg`: `a0`, `a1`  
 - `num`: `0`-`255` or `x0`-`xFF`
-- `addr`: `x0`-`xFFFF` 
-- `lbl`: `[a-zA-Z0-9_]+`
+- `addr`: `@0`-`@65535` or `@x0`-`@xFFFF` 
+- `lbl`: `[a-zA-Z][a-zA-Z0-9_]*`
 
 ### Math
 
@@ -90,19 +93,36 @@ Jump to label if overflow flag not set
 
 ### Addresses
 
-`ADDRH addr_reg data_reg`
+`SWPAR`
 
-Load value from `data_reg` into high byte of `addr_reg`
+Swap contents of `A0` and `A1`
 
-`ADDRL addr_reg data_reg`
+`CMPAR`
 
-Load value from `data_reg` into low byte of `addr_reg`
+Compares contents of `A0` and `A1` and stores result in `ACC`
+Values are relative to `A0`, so if `A0` > `A1` then `ACC` will contain `GREATER`
+
+`CPYA0 addr|lbl or reg reg`
+
+Copy from parameters (address, or two data registers) into `A0`
+
+`CPYA1 addr|lbl or reg reg`
+
+Copy from parameters (address, or two data registers) into `A1`
+
+`LDA0 reg reg`
+
+Copy value from `A0` into registers
+
+`LDA1 reg reg`
+
+Copy value from `A1` into registers
 
 ### File
 
 `FOPEN`
 
-Opens specified input file for reading, populates D3-D0 with file size in bytes
+Opens specified input file for reading, populates `D3`-`D0` with file size in bytes
 
 `FREAD addr|addr_reg`
 

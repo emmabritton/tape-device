@@ -69,6 +69,20 @@ impl Op {
         }
     }
 
+    pub const fn new_addrreg_regval(
+        mnemonic: &'static str,
+        opcode_regreg: u8,
+        opcode_regval: u8,
+    ) -> Self {
+        Op {
+            mnemonic,
+            variants: [
+                OpVariant::new_double(opcode_regreg, Parameters::REGISTERS, Parameters::DATA_REG),
+                OpVariant::new_double(opcode_regval, Parameters::REGISTERS, Parameters::NUMBER),
+            ],
+        }
+    }
+
     pub const fn new_single_reg(mnemonic: &'static str, opcode: u8) -> Self {
         Op {
             mnemonic,

@@ -198,6 +198,8 @@ pub fn decode(
         CPY_A1_ADDR => ("CPYA1", decode_addr(op[1], op[2]), String::new()),
         LDA0_REG_REG => ("LDA0", decode_reg(op[1]), decode_reg(op[2])),
         LDA1_REG_REG => ("LDA1", decode_reg(op[1]), decode_reg(op[2])),
+        ARG_REG_VAL => ("ARG", decode_reg(op[1]), decode_num(op[2])),
+        ARG_REG_REG => ("ARG", decode_reg(op[1]), decode_reg(op[2])),
         _ => ("???", String::new(), String::new()),
     };
     Decoded::new(

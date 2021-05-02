@@ -1,7 +1,7 @@
 use crate::constants::code::*;
 use crate::language::parser::ops::Op;
 
-pub(super) const OPS: [Op; 36] = [
+pub(super) const OPS: [Op; 37] = [
     //CPY reg reg|val
     //Copy value from 2nd param to 1st
     Op::new_reg_val("CPY", CPY_REG_REG, CPY_REG_VAL),
@@ -110,4 +110,7 @@ pub(super) const OPS: [Op; 36] = [
     //POP addr_reg|reg
     //Pop value from stack to 1st param
     Op::new_single_reg("POP", POP_REG),
+    //POP addr_reg|reg reg|val
+    //Read from value from stack 2nd param bytes before the FP and save to 1st param
+    Op::new_addrreg_regval("ARG", ARG_REG_REG, ARG_REG_VAL),
 ];

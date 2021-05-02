@@ -117,6 +117,11 @@ mod tests {
         test_addrregval("PUSH", PUSH_REG, PUSH_VAL);
     }
 
+    #[test]
+    fn new_addrreg_regvals() {
+        test_addrreg_regval("ARG", ARG_REG_REG, ARG_REG_VAL);
+    }
+
     const LABEL: &str = "label";
     const DATA_REG: &str = "D0";
     const ADDR_REG: &str = "a1";
@@ -475,6 +480,44 @@ mod tests {
             vec![
                 DATA_REG, NUMBER, NUMBER_HEX, ADDR_REG, ADDR, ADDR_HEX, LABEL,
             ],
+        );
+    }
+
+    /// Test operations that support
+    /// data_reg|addr_reg
+    /// num|data_reg
+    fn test_addrreg_regval(op: &str, opcode_regreg: u8, opcode_regval: u8) {
+        test_parse_line(
+            format!("{} {} {}", op, DATA_REG, DATA_REG),
+            opcode_regreg,
+            Param::DataReg(REG_D0),
+            Param::DataReg(REG_D0),
+        );
+        test_parse_line(
+            format!("{} {} {}", op, ADDR_REG, DATA_REG),
+            opcode_regreg,
+            Param::AddrReg(REG_A1),
+            Param::DataReg(REG_D0),
+        );
+        test_parse_line(
+            format!("{} {} {}", op, DATA_REG, NUMBER),
+            opcode_regval,
+            Param::DataReg(REG_D0),
+            Param::Number(34),
+        );
+        test_parse_line(
+            format!("{} {} {}", op, DATA_REG, NUMBER_HEX),
+            opcode_regval,
+            Param::DataReg(REG_D0),
+            Param::Number(58),
+        );
+
+        test_invalid_parse_line(
+            op,
+            vec![DATA_REG, ADDR_REG],
+            vec![DATA_REG, NUMBER_HEX, NUMBER],
+            vec![ADDR, ADDR_HEX, LABEL, NUMBER_HEX, NUMBER],
+            vec![ADDR_REG, ADDR, ADDR_HEX, LABEL],
         );
     }
 }

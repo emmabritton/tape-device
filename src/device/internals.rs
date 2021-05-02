@@ -314,6 +314,11 @@ impl Device {
             PUSH_VAL => self.stack_push(self.tape_ops[idx + 1]),
             PUSH_REG => self.stack_push_reg(self.tape_ops[idx + 1])?,
             POP_REG => self.stack_pop(self.tape_ops[idx + 1])?,
+            ARG_REG_VAL => self.stack_arg(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
+            ARG_REG_REG => self.stack_arg(
+                self.tape_ops[idx + 1],
+                self.get_reg(self.tape_ops[idx + 2])?,
+            )?,
             RET => self.stack_return(),
             CALL_ADDR => {
                 self.stack_call(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]), false)
@@ -758,6 +763,26 @@ impl Device {
             _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
         }
 
+        Ok(())
+    }
+
+    fn stack_arg(&mut self, reg: u8, offset: u8) -> Result<()> {
+        let addr = self.fp.saturating_add(offset as u16) as usize;
+        let addr_second = self.fp.saturating_add((offset.saturating_add(1)) as u16) as usize;
+        match reg {
+            REG_ACC => self.acc = self.mem[addr],
+            REG_D0 => self.data_reg[0] = self.mem[addr],
+            REG_D1 => self.data_reg[1] = self.mem[addr],
+            REG_D2 => self.data_reg[2] = self.mem[addr],
+            REG_D3 => self.data_reg[3] = self.mem[addr],
+            REG_A0 => {
+                self.addr_reg[0] = u16::from_be_bytes([self.mem[addr_second], self.mem[addr]])
+            }
+            REG_A1 => {
+                self.addr_reg[1] = u16::from_be_bytes([self.mem[addr_second], self.mem[addr]])
+            }
+            _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
+        }
         Ok(())
     }
 

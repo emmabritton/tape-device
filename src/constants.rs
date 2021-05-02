@@ -77,6 +77,8 @@ pub mod code {
     pub const PUSH_REG: u8 = 0x73;
     pub const PUSH_VAL: u8 = 0x74;
     pub const POP_REG: u8 = 0x75;
+    pub const ARG_REG_VAL: u8 = 0x76;
+    pub const ARG_REG_REG: u8 = 0x77;
 
     pub const PRT_REG: u8 = 0x90;
     pub const PRT_VAL: u8 = 0x91;

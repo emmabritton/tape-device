@@ -276,6 +276,7 @@ fn is_invalid_constant_name(name: &str) -> bool {
             | "swpar"
             | "cmpar"
             | "prtln"
+            | "arg"
     )
 }
 
@@ -396,6 +397,8 @@ mod test {
             "ret",
             "nop",
             "halt",
+            "arg d0 d1",
+            "arg d2 3",
         ]
         .iter()
         .map(|line| line.to_string())
@@ -578,7 +581,13 @@ mod test {
                 REG_D3,
                 RET,
                 NOP,
-                HALT
+                HALT,
+                ARG_REG_REG,
+                REG_D0,
+                REG_D1,
+                ARG_REG_VAL,
+                REG_D2,
+                3
             ]
         );
     }

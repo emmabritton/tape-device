@@ -966,4 +966,29 @@ mod test {
         assert_eq!(printer.borrow().output(), String::new());
         assert_eq!(printer.borrow().error_output(), String::new());
     }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_stack() {
+        let ops = vec![
+            PUSH_VAL, 5, CPY_REG_VAL, REG_ACC, 10, PUSH_REG, REG_ACC
+        ];
+        let printer = DebugPrinter::new();
+        let mut device = Device::new(ops, vec![], None, printer.clone());
+
+        assert_eq!(device.dump(), Dump::default());
+        device.assert_mem(SP_MAX-1 , 0);
+        device.assert_mem(SP_MAX-2, 0);
+        
+        assert_step_device("PUSH 5", &mut device, Dump {pc: 2,sp:SP_MAX - 1,..Dump::default()});
+        device.assert_mem(SP_MAX-1, 5);
+        assert_step_device("CPY ACC 10", &mut device, Dump {pc: 5,sp:SP_MAX - 1,acc:10,..Dump::default()});
+        assert_step_device("PUSH ACC", &mut device, Dump {pc: 7,sp:SP_MAX - 2,acc:10,..Dump::default()});
+        device.assert_mem(SP_MAX-1, 5);
+        device.assert_mem(SP_MAX - 2, 10);
+        
+
+        assert_eq!(printer.borrow().output(), String::new());
+        assert_eq!(printer.borrow().error_output(), String::new());
+    }
 }

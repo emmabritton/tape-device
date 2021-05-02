@@ -1,12 +1,11 @@
-use crate::common::{read_bytes, Instruction};
-use crate::constants::code::ALIGNMENT_PADDING;
+use crate::common::read_bytes;
 use crate::constants::system::*;
 use anyhow::{Context, Error, Result};
 
 pub struct Tape {
     pub name: String,
     pub version: String,
-    pub ops: Vec<Instruction>,
+    pub ops: Vec<u8>,
     pub data: Vec<u8>,
 }
 
@@ -23,27 +22,13 @@ pub fn read_tape(path: &str) -> Result<Tape> {
     }
     let name = read_string(&mut bytes, &mut idx, "program name")?;
     let version = read_string(&mut bytes, &mut idx, "program version")?;
-    let program_count = u16::from_be_bytes([
+    let pc_byte_count = u16::from_be_bytes([
         get_byte(&mut bytes, &mut idx, "program op count")?,
         get_byte(&mut bytes, &mut idx, "program op count")?,
     ]) as usize;
-    if program_count * 3 > bytes.len() {
-        return Err(Error::msg(format!(
-            "Tape corrupt: program ops ({}) and count ({}) don't match",
-            bytes.len() / 3,
-            program_count
-        )));
-    }
     let mut ops = vec![];
-    while bytes.get(0) == Some(&ALIGNMENT_PADDING) {
-        bytes.remove(0);
-    }
-    for i in 0..program_count {
-        ops.push([
-            get_byte(&mut bytes, &mut idx, &format!("op {}", i))?,
-            get_byte(&mut bytes, &mut idx, &format!("op {}", i))?,
-            get_byte(&mut bytes, &mut idx, &format!("op {}", i))?,
-        ]);
+    for _ in 0..pc_byte_count {
+        ops.push(get_byte(&mut bytes, &mut idx, "program")?);
     }
 
     Ok(Tape {

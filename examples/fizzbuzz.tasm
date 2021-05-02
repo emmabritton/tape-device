@@ -1,44 +1,59 @@
 FizzBuzz
 1.0
+.strings
+fizz=Fizz
+buzz=Buzz
+colon=:
 
-start:			INC D0
-				PRT D0
+.ops
+const idx d0
+const worker D3
+CONST result1 D1
+const result2 d2
+const pass 0
+const fail 1
+
+# Program params
+const max 15
+const step1 3
+const step2 5
+
+start:			INC idx
+				PRT idx
 				PRTD colon
-				JMP check_fizz
-fizz_result:	JMP check_buzz
-buzz_result:	CMP D1 0
+				CALL check_fizz
+            	CALL check_buzz
+            	CMP result1 pass
 				JNE buzzer
 				PRTD fizz
-buzzer:			CMP D2 0
+buzzer:			CMP result2 pass
 				JNE new_line
 				PRTD buzz
 new_line:		PRTLN
-				CMP D0 15
+				CMP idx max
 				JL start
 				HALT
 
-check_fizz:		CPY D3 D0
-fizz_sub:		SUB D3 3
+check_fizz:		CPY worker idx
+fizz_sub:		SUB worker step1
 				OVER fizz_fail
-				CPY D3 ACC
-				CMP D3 0
+				CPY worker ACC
+				CMP worker 0
 				JE fizz_pass
 				JMP fizz_sub
-fizz_pass:		CPY D1 0
-				JMP fizz_result
-fizz_fail:		CPY D1 1
-				JMP fizz_result
+fizz_pass:		CPY result1 pass
+				ret
+fizz_fail:		CPY result1 fail
+				ret
 
-check_buzz:		CPY D3 D0
-buzz_sub:		SUB D3 5
+check_buzz:		CPY worker idx
+buzz_sub:		SUB worker step2
 				OVER buzz_fail
-				CPY D3 ACC
-				CMP D3 0
+				CPY worker ACC
+				CMP worker 0
 				JE buzz_pass
 				JMP buzz_sub
-buzz_pass:		CPY D2 0
-				JMP buzz_result
-buzz_fail:		CPY D2 1
-				JMP buzz_result
-
-end: 			NOP
+buzz_pass:		CPY result2 pass
+				ret
+buzz_fail:		CPY result2 fail
+				ret

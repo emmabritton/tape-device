@@ -1,8 +1,8 @@
+use crate::constants::get_byte_count;
 use crate::debugger::internals::Debugger;
-use crate::debugger::printer::DebugPrinter;
 use crate::decompiler::{collect_jump_targets, decode, Decoded};
 use crate::device::internals::Device;
-use crate::printer::{Printer, RcBox};
+use crate::printer::{DebugPrinter, Printer, RcBox};
 use crate::tape_reader::{read_tape, Tape};
 use anyhow::Result;
 use crossterm::terminal::{
@@ -15,7 +15,6 @@ use tui::backend::CrosstermBackend;
 use tui::Terminal;
 
 mod internals;
-mod printer;
 mod status_widget;
 
 type DebugTerminal = Terminal<CrosstermBackend<Stdout>>;
@@ -57,9 +56,15 @@ fn close_terminal() -> Result<()> {
 fn decompile(tape: &Tape) -> Vec<Decoded> {
     let jump_targets = collect_jump_targets(&tape.ops);
     let mut results = vec![];
-    for (idx, op) in tape.ops.iter().enumerate() {
-        results.push(decode(op, &tape.data, idx, jump_targets.contains(&idx)));
+    let mut ops = tape.ops.clone();
+    let mut pc = 0;
+
+    while !ops.is_empty() {
+        let op = decode(&mut ops, &tape.data, pc, jump_targets.contains(&pc));
+        pc += get_byte_count(op.bytes[0]);
+        results.push(op);
     }
+
     results
 }
 

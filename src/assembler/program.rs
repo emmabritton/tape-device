@@ -6,10 +6,75 @@ use std::collections::{HashMap, HashSet};
 
 type LabelTable = HashMap<String, (Option<usize>, Vec<usize>)>;
 
+fn process_constants(lines: Vec<String>) -> Result<(Vec<String>, Vec<String>)> {
+    let (constants, ops): (Vec<&str>, Vec<&str>) = lines
+        .iter()
+        .map(|line| line.trim())
+        .partition(|line| line.to_ascii_lowercase().starts_with("const"));
+
+    let mut constant_names = vec![];
+    let mut constant_lookup = HashMap::new();
+
+    for constant in constants {
+        let split = constant.split_ascii_whitespace().collect::<Vec<&str>>();
+        if split.len() != 3 {
+            return Err(Error::msg(format!(
+                "Unable to parse constant: '{}'",
+                constant
+            )));
+        }
+        if is_invalid_constant_name(split[1]) {
+            return Err(Error::msg(format!(
+                "Invalid constant name for '{}', constant names can't be mnemonic or registers",
+                constant
+            )));
+        }
+        if constant_names.contains(&split[1]) {
+            return Err(Error::msg(format!("Constant defined twice: {}", split[1])));
+        }
+        constant_lookup.insert(split[1], split[2]);
+        constant_names.push(split[1]);
+    }
+
+    let mut processed_ops = vec![];
+
+    for op in ops {
+        let parts = op.split(":").collect::<Vec<&str>>();
+        let (label, mut op) = match parts.len() {
+            1 => (
+                String::new(),
+                parts[0].split_ascii_whitespace().collect::<Vec<&str>>(),
+            ),
+            2 => (
+                format!("{}: ", parts[0]),
+                parts[1].split_ascii_whitespace().collect::<Vec<&str>>(),
+            ),
+            _ => return Err(Error::msg(format!("Unable to parse '{}'", op))),
+        };
+        if op.len() > 1 && constant_names.contains(&op[1]) {
+            op[1] = constant_lookup[op[1]]
+        }
+        if op.len() > 2 && constant_names.contains(&op[2]) {
+            op[2] = constant_lookup[op[2]]
+        }
+        let op = op.join(" ");
+        processed_ops.push(format!("{}{}", label, op));
+    }
+
+    let constant_names = constant_names
+        .into_iter()
+        .map(|line| line.to_string())
+        .collect();
+
+    Ok((constant_names, processed_ops))
+}
+
 pub(super) fn assemble(lines: Vec<String>, strings_data: HashMap<String, u16>) -> Result<Vec<u8>> {
     let mut program = Vec::with_capacity(lines.len() * 2);
     let mut used_string_keys = HashSet::with_capacity(strings_data.len());
     let mut labels: LabelTable = HashMap::new();
+
+    let (constants, lines) = process_constants(lines)?;
 
     for line in lines.iter() {
         let line = line.trim();
@@ -67,6 +132,12 @@ pub(super) fn assemble(lines: Vec<String>, strings_data: HashMap<String, u16>) -
     }
 
     for lbl in labels.keys() {
+        if constants.contains(lbl) {
+            return Err(Error::msg(format!(
+                "Label and constant share name: {}",
+                lbl
+            )));
+        }
         if let Some(target) = labels[lbl].0 {
             for caller in &labels[lbl].1 {
                 let addr = (target as u16).to_be_bytes();
@@ -165,393 +236,370 @@ fn is_valid_label(label: &str) -> Option<String> {
     None
 }
 
+fn is_invalid_constant_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "d0" | "d1"
+            | "d2"
+            | "d3"
+            | "a0"
+            | "a1"
+            | "acc"
+            | "const"
+            | "inc"
+            | "dec"
+            | "add"
+            | "sub"
+            | "cmp"
+            | "over"
+            | "jmp"
+            | "je"
+            | "jne"
+            | "jl"
+            | "jg"
+            | "cpy"
+            | "prtd"
+            | "prt"
+            | "push"
+            | "pop"
+            | "prtc"
+            | "call"
+            | "ret"
+            | "halt"
+            | "nop"
+            | "lda0"
+            | "lda1"
+            | "cpya0"
+            | "cpya1"
+            | "nover"
+            | "fopen"
+            | "filer"
+            | "filew"
+            | "fseek"
+            | "fskip"
+            | "memr"
+            | "memw"
+            | "swpar"
+            | "cmpar"
+            | "prtln"
+    )
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::constants::code::*;
 
     #[test]
-    fn test_decode() {
-        let mut map = HashMap::new();
-        map.insert(String::from("test_str"), 10 as u16);
-        let mut used_keys = HashSet::new();
-        let pc = 0;
-        let mut labels: LabelTable = HashMap::new();
+    fn test_basic_file() {
+        let input = vec![
+            "INC D0",
+            "PRT d0",
+            "sample: CPY ACC D0",
+            "inC D0",
+            "PRtC ACC",
+            "jmP sample",
+        ]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+
+        let result = assemble(input, HashMap::new());
+        assert!(result.is_ok());
 
         assert_eq!(
-            decode("ADD D0 10", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [ADD_REG_VAL, REG_D0, 10]
-        );
-        assert_eq!(
-            decode("ADD D0 ACC", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [ADD_REG_REG, REG_D0, REG_ACC]
-        );
-        assert!(decode("ADD D0", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("SUB D0 ACC", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [SUB_REG_REG, REG_D0, REG_ACC]
-        );
-        assert_eq!(
-            decode("SUB D3 xEA", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [SUB_REG_VAL, REG_D3, 234]
-        );
-        assert!(decode("sub D0", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("addrh A0 D0", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_LOAD_ADDR_HIGH, REG_A0, REG_D0]
-        );
-        assert_eq!(
-            decode("addrh A1 233", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_LOAD_ADDR_HIGH_VAL, REG_A1, 233]
-        );
-        assert_eq!(
-            decode("addrl A1 ACC", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_LOAD_ADDR_LOW, REG_A1, REG_ACC]
-        );
-        assert_eq!(
-            decode("addrl A0 2", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_LOAD_ADDR_LOW_VAL, REG_A0, 2]
-        );
-        assert!(decode("addrh", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("addrl", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("addrh 10", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("addrh d0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("addrl a0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("addrh a0 @a", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("addrl @a a0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("addrh d1 a0", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("mEMw @10", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_MEM_WRITE, 0, 10]
-        );
-        assert_eq!(
-            decode("memw @xEA", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_MEM_WRITE, 0, 234]
-        );
-        assert_eq!(
-            decode("memw A0", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_MEM_WRITE_REG, REG_A0, 0]
-        );
-        assert!(decode("memW D0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("MEMW 10", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("inc d2", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [INC, REG_D2, 0]
-        );
-        assert!(decode("inc 10", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("dec d1", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [DEC, REG_D1, 0]
-        );
-
-        assert_eq!(
-            decode("cmp d1 d2", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_CMP_REG_REG, REG_D1, REG_D2]
-        );
-        assert_eq!(
-            decode("cmp acc 18", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_CMP_REG_VAL, REG_ACC, 18]
-        );
-        assert!(decode("cmp @1 d2", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("cpy D2 D1", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_COPY_REG_REG, REG_D2, REG_D1]
-        );
-        assert_eq!(
-            decode("cpy D1 6", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_COPY_REG_VAL, REG_D1, 6]
-        );
-        assert_eq!(
-            decode("cpy D3 x64", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_COPY_REG_VAL, REG_D3, 100]
-        );
-        assert_eq!(
-            decode("MEMR @4", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_MEM_READ, 0, 4]
-        );
-        assert_eq!(
-            decode("MEMR A1", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_MEM_READ_REG, REG_A1, 0]
-        );
-        assert_eq!(
-            decode("memr @x34", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_MEM_READ, 0, 52]
-        );
-        assert!(decode("memr ACC @1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("memr D0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("memr 10", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("PRT 10", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_PRINT_VAL, 10, 0]
-        );
-        assert_eq!(
-            decode("PRT xF", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_PRINT_VAL, 15, 0]
-        );
-        assert_eq!(
-            decode("PRT D0", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_PRINT_REG, REG_D0, 0]
-        );
-        assert_eq!(
-            decode("PRT @xFF", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_PRINT_MEM, 0, 255]
-        );
-        assert_eq!(
-            decode("PRT A0", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_PRINT_MEM_REG, REG_A0, 0]
-        );
-        assert!(decode("PRT", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("PRTD test_str", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_PRINT_DAT, 0, 10]
-        );
-        assert!(decode("PRTD doesnt_exist", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("PRTD D0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("PRTD 10", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("PRTD @10", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("PRTD", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("PRTLN", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_PRINT_LN, 0, 0]
-        );
-        assert!(decode("PRTLN 1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("PRTLN D0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("PRTLN @xA", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("FOPEN", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_OPEN_FILE, 0, 0]
-        );
-        assert!(decode("FOPEN 1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("FOPEN D2", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("FOPEN @xA", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("FREAD @xF0", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_READ_FILE, 0, 240]
-        );
-        assert!(decode("FREAD 1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("FREAD D2", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("FREAD", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("FSKIP ACC", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_SKIP_FILE, REG_ACC, 0]
-        );
-        assert!(decode("FSKIP 1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("FSKIP", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("FSKIP @xA", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("NOP", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_NOP, 0, 0]
-        );
-        assert_eq!(
-            decode("HALT", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_HALT, 0, 0]
-        );
-        assert!(decode("NOP 1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("NOP @1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("NOP lbl", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("NOP acc", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("halt 1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("halt @1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("halt lbl", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("halt acc", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("JMP tst", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_JMP, 0, 0]
-        );
-        assert_eq!(
-            decode("JMP @55", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_JMP, 0, 55]
-        );
-        assert_eq!(
-            decode("JMP A0", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_JMP_REG, REG_A0, 0]
-        );
-        assert!(decode("jmp", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("je tst", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_JE, 0, 0]
-        );
-        assert_eq!(
-            decode("je @3", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_JE, 0, 3]
-        );
-        assert!(decode("je", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("jl tst", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_JL, 0, 0]
-        );
-        assert!(decode("jl", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("jg tst", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_JG, 0, 0]
-        );
-        assert!(decode("jg", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("jne tst", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_JNE, 0, 0]
-        );
-        assert!(decode("jne", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("push d0", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_PUSH_REG, REG_D0, 0]
-        );
-        assert_eq!(
-            decode("push 25", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_PUSH_VAL, 25, 0]
-        );
-        assert!(decode("push", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("push a0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("push @1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("push test", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("pop d3", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_POP_REG, REG_D3, 0]
-        );
-        assert!(decode("pop ", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("pop 25", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("pop  a0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("pop  @1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("pop  test", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("call lbl", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_CALL_ADDR, 0, 0]
-        );
-        assert_eq!(
-            decode("call @xABCD", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_CALL_ADDR, 0xAB, 0xCD]
-        );
-        assert_eq!(
-            decode("call A0", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_CALL_REG, REG_A0, 0]
-        );
-        assert_eq!(
-            decode("call 123", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_CALL_ADDR, 0, 0]
-        );
-        assert_eq!(
-            decode("call acc", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_CALL_ADDR, 0, 0]
-        );
-
-        assert_eq!(
-            decode("reT", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_RETURN, 0, 0]
-        );
-        assert!(decode("ret d0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("ret 25", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("ret  a0", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("ret  @1", pc, &map, &mut used_keys, &mut labels).is_err());
-        assert!(decode("ret  test", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("over tst", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_OVERFLOW, 0, 0]
-        );
-        assert_eq!(
-            decode("over A1", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_OVERFLOW_REG, REG_A1, 0]
-        );
-        assert!(decode("over", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert_eq!(
-            decode("nover tst", pc, &map, &mut used_keys, &mut labels).unwrap(),
-            [OP_NOT_OVERFLOW, 0, 0]
-        );
-        assert!(decode("nover", pc, &map, &mut used_keys, &mut labels).is_err());
-
-        assert!(decode("invalid", pc, &map, &mut used_keys, &mut labels).is_err());
-    }
-
-    #[test]
-    fn test_invalid_compile() {
-        let script = vec![String::from("this is invalid")];
-        let program = assemble(script, HashMap::new());
-        assert!(program.is_err());
-    }
-
-    #[test]
-    fn test_compile() {
-        let script = r"test prog
-        1
-        #program
-        ADD D0 10
-  goto: SUB D3 xEA
-        CPY D2 D1
-        JMP goto
-        #last statement
-        MEMR @4
-        ";
-        let (name, ver, program) = assemble(
-            script.lines().map(|str| str.to_string()).collect(),
-            HashMap::new(),
-        )
-        .unwrap();
-        assert_eq!(&name, "test prog");
-        assert_eq!(&ver, "1");
-        assert_eq!(
-            program,
-            vec![
-                [OP_NOP, 0, 0],
-                [ADD_REG_VAL, REG_D0, 10],
-                [SUB_REG_VAL, REG_D3, 234],
-                [OP_COPY_REG_REG, REG_D2, REG_D1],
-                [OP_JMP, 0, 2],
-                [OP_NOP, 0, 0],
-                [OP_MEM_READ, 0, 4],
-                [OP_NOP, 0, 0],
+            result.unwrap(),
+            [
+                INC_REG,
+                REG_D0,
+                PRT_REG,
+                REG_D0,
+                CPY_REG_REG,
+                REG_ACC,
+                REG_D0,
+                INC_REG,
+                REG_D0,
+                PRTC_REG,
+                REG_ACC,
+                JMP_ADDR,
+                0,
+                4
             ]
         );
     }
 
     #[test]
-    fn test_addressing() {
-        let script = r"test prog
-        1
-        ADDRH A0 2
-        CPY D0 xFF
-        CPY D1 xAA
-        ADDRH A0 D0
-        ADDRL A0 D1
-        ADDRH A1 D1
-        ADDRL A1 D0
-        ";
-        let (_, _, program) = assemble(
-            script.lines().map(|str| str.to_string()).collect(),
-            HashMap::new(),
-        )
-        .unwrap();
+    fn test_all_ops() {
+        let input = vec![
+            "start: CPY D1 0",
+            "CPY D2 ACC",
+            "ADD D3 0",
+            "ADD D1 D2",
+            "SUB ACC x10",
+            "SUB ACC D0",
+            "inc d0",
+            "inc a0",
+            "dec d1",
+            "dec a1",
+            "CMP D1 xF",
+            "cmp d3 d3",
+            "jmp start",
+            "jmp @xfFf",
+            "jmp a0",
+            "je start",
+            "je @0",
+            "je a0",
+            "jne start",
+            "jne @0",
+            "jne a0",
+            "jg start",
+            "jg @0",
+            "jg a0",
+            "jl start",
+            "jl @0",
+            "jl a0",
+            "over start",
+            "over @0",
+            "over a0",
+            "nover start",
+            "nover @0",
+            "nover a0",
+            "memr a0",
+            "memr @xa2",
+            "memw a1",
+            "memw @911",
+            "fopen",
+            "fseek",
+            "fskip d0",
+            "fskip 11",
+            "filew @1",
+            "filew @xF",
+            "filew a0",
+            "filer @1500",
+            "filer @x0",
+            "filer a1",
+            "cmpar",
+            "swpar",
+            "lda0 d0 d1",
+            "lda1 d2 d3",
+            "cpya0 d2 d3",
+            "cpya1 d2 d3",
+            "cpya0 @334",
+            "cpya1 @334",
+            "prtc 0",
+            "prtc acc",
+            "prt 0",
+            "prt acc",
+            "prtd str",
+            "prtln",
+            "call a0",
+            "call start",
+            "push a0",
+            "push d3",
+            "push 99",
+            "push xFF",
+            "pop d3",
+            "ret",
+            "nop",
+            "halt",
+        ]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+
+        let mut strings = HashMap::new();
+        strings.insert(String::from("str"), 0_u16);
+
+        let result = assemble(input, strings);
+        assert!(result.is_ok());
         assert_eq!(
-            program,
-            vec![
-                [OP_LOAD_ADDR_HIGH_VAL, REG_A0, 2],
-                [OP_COPY_REG_VAL, REG_D0, 255],
-                [OP_COPY_REG_VAL, REG_D1, 170],
-                [OP_LOAD_ADDR_HIGH, REG_A0, REG_D0],
-                [OP_LOAD_ADDR_LOW, REG_A0, REG_D1],
-                [OP_LOAD_ADDR_HIGH, REG_A1, REG_D1],
-                [OP_LOAD_ADDR_LOW, REG_A1, REG_D0],
-                [OP_NOP, 0, 0],
+            result.unwrap(),
+            [
+                CPY_REG_VAL,
+                REG_D1,
+                0,
+                CPY_REG_REG,
+                REG_D2,
+                REG_ACC,
+                ADD_REG_VAL,
+                REG_D3,
+                0,
+                ADD_REG_REG,
+                REG_D1,
+                REG_D2,
+                SUB_REG_VAL,
+                REG_ACC,
+                16,
+                SUB_REG_REG,
+                REG_ACC,
+                REG_D0,
+                INC_REG,
+                REG_D0,
+                INC_REG,
+                REG_A0,
+                DEC_REG,
+                REG_D1,
+                DEC_REG,
+                REG_A1,
+                CMP_REG_VAL,
+                REG_D1,
+                15,
+                CMP_REG_REG,
+                REG_D3,
+                REG_D3,
+                JMP_ADDR,
+                0,
+                0,
+                JMP_ADDR,
+                15,
+                255,
+                JMP_AREG,
+                REG_A0,
+                JE_ADDR,
+                0,
+                0,
+                JE_ADDR,
+                0,
+                0,
+                JE_AREG,
+                REG_A0,
+                JNE_ADDR,
+                0,
+                0,
+                JNE_ADDR,
+                0,
+                0,
+                JNE_AREG,
+                REG_A0,
+                JG_ADDR,
+                0,
+                0,
+                JG_ADDR,
+                0,
+                0,
+                JG_AREG,
+                REG_A0,
+                JL_ADDR,
+                0,
+                0,
+                JL_ADDR,
+                0,
+                0,
+                JL_AREG,
+                REG_A0,
+                OVER_ADDR,
+                0,
+                0,
+                OVER_ADDR,
+                0,
+                0,
+                OVER_AREG,
+                REG_A0,
+                NOVER_ADDR,
+                0,
+                0,
+                NOVER_ADDR,
+                0,
+                0,
+                NOVER_AREG,
+                REG_A0,
+                MEMR_AREG,
+                REG_A0,
+                MEMR_ADDR,
+                0,
+                162,
+                MEMW_AREG,
+                REG_A1,
+                MEMW_ADDR,
+                3,
+                143,
+                FOPEN,
+                FSEEK,
+                FSKIP_REG,
+                REG_D0,
+                FSKIP_VAL,
+                11,
+                FILEW_ADDR,
+                0,
+                1,
+                FILEW_ADDR,
+                0,
+                15,
+                FILEW_AREG,
+                REG_A0,
+                FILER_ADDR,
+                5,
+                220,
+                FILER_ADDR,
+                0,
+                0,
+                FILER_AREG,
+                REG_A1,
+                CMPAR,
+                SWPAR,
+                LDA0_REG_REG,
+                REG_D0,
+                REG_D1,
+                LDA1_REG_REG,
+                REG_D2,
+                REG_D3,
+                CPY_A0_REG_REG,
+                REG_D2,
+                REG_D3,
+                CPY_A1_REG_REG,
+                REG_D2,
+                REG_D3,
+                CPY_A0_ADDR,
+                1,
+                78,
+                CPY_A1_ADDR,
+                1,
+                78,
+                PRTC_VAL,
+                0,
+                PRTC_REG,
+                REG_ACC,
+                PRT_VAL,
+                0,
+                PRT_REG,
+                REG_ACC,
+                PRTD_STR,
+                0,
+                0,
+                PRTLN,
+                CALL_AREG,
+                REG_A0,
+                CALL_ADDR,
+                0,
+                0,
+                PUSH_REG,
+                REG_A0,
+                PUSH_REG,
+                REG_D3,
+                PUSH_VAL,
+                99,
+                PUSH_VAL,
+                255,
+                POP_REG,
+                REG_D3,
+                RET,
+                NOP,
+                HALT
             ]
         );
+    }
+
+    #[test]
+    fn test_invalid_label() {
+        let input = vec![String::from("JMP nowhere")];
+        let result = assemble(input, HashMap::new());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_string() {
+        let input = vec![String::from("PRTD nowhere")];
+        let result = assemble(input, HashMap::new());
+        assert!(result.is_err());
     }
 }

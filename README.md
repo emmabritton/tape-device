@@ -5,9 +5,14 @@ Language for fictional computer with no screen or input devices that executes pr
 ### Device
 
 - Registers: 
-  - Special: ACC (Accumlator)
+  - Special: ACC (Accumulator)
   - 8 bit: D0, D1, D2, D3
   - 16 bit: A0, A1
+  - Internal (not directly accessible:
+    - FP: Frame pointer
+    - SP: Stack pointer
+    - Overflow: Overflow flag
+    - PC: Program counter
 - RAM: 65,535 bytes
 - Max program length: 65,535 bytes
 - Max string data: 65,535 bytes (max length per string: 255 bytes)

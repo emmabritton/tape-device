@@ -1,9 +1,8 @@
 use crate::constants::get_byte_count;
 use crate::debugger::internals::Debugger;
-use crate::debugger::printer::DebugPrinter;
 use crate::decompiler::{collect_jump_targets, decode, Decoded};
 use crate::device::internals::Device;
-use crate::printer::{Printer, RcBox};
+use crate::printer::{DebugPrinter, Printer, RcBox};
 use crate::tape_reader::{read_tape, Tape};
 use anyhow::Result;
 use crossterm::terminal::{
@@ -16,7 +15,6 @@ use tui::backend::CrosstermBackend;
 use tui::Terminal;
 
 mod internals;
-mod printer;
 mod status_widget;
 
 type DebugTerminal = Terminal<CrosstermBackend<Stdout>>;

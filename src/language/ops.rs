@@ -1,7 +1,7 @@
 use crate::constants::code::*;
 use crate::language::parser::ops::Op;
 
-pub(super) const OPS: [Op; 35] = [
+pub(super) const OPS: [Op; 36] = [
     //CPY reg reg|val
     //Copy value from 2nd param to 1st
     Op::new_reg_val("CPY", CPY_REG_REG, CPY_REG_VAL),
@@ -95,6 +95,9 @@ pub(super) const OPS: [Op; 35] = [
     //PRTC reg|val
     //Prints value in 1st param as ASCII
     Op::new_regval("PRTC", PRTC_REG, PRTC_VAL),
+    //FSKIP reg|val
+    //Move file cursor forward by number of bytes set by 1st param
+    Op::new_regval("FSKIP", FSKIP_REG, FSKIP_VAL),
     //PRTD key
     //Prints string named by 1st param
     Op::new_string("PRTD", PRTD_STR),
@@ -103,7 +106,7 @@ pub(super) const OPS: [Op; 35] = [
     Op::new_jmp("CALL", CALL_ADDR, CALL_AREG),
     //PUSH addr_reg|reg|val
     //Push 1st param in to stack
-    Op::new_regval("PUSH", PUSH_REG, PUSH_VAL),
+    Op::new_addrregval("PUSH", PUSH_REG, PUSH_VAL),
     //POP addr_reg|reg
     //Pop value from stack to 1st param
     Op::new_single_reg("POP", POP_REG),

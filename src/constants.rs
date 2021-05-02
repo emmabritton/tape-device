@@ -92,6 +92,7 @@ pub mod code {
     pub const FILEW_AREG: u8 = 0xC4;
     pub const FSEEK: u8 = 0xC5;
     pub const FSKIP_REG: u8 = 0xC6;
+    pub const FSKIP_VAL: u8 = 0xC7;
 
     pub const NOP: u8 = 0xFE;
     pub const HALT: u8 = 0xFF;
@@ -138,7 +139,7 @@ pub fn is_jump_op(opcode: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::constants::code::*;
-    use crate::constants::{get_byte_count, ALL_OPS};
+    use crate::constants::get_byte_count;
     use std::collections::HashSet;
 
     const ALL_OPS: [u8; 57] = [
@@ -204,7 +205,7 @@ mod tests {
     #[test]
     fn check_ops_are_unique() {
         let mut found = HashSet::new();
-        for op in ALL_OPS {
+        for op in ALL_OPS.iter() {
             if found.contains(op) {
                 panic!("Found duplicate: {}", op);
             }
@@ -214,8 +215,8 @@ mod tests {
 
     #[test]
     fn check_ops_have_byte_counts() {
-        for op in ALL_OPS {
-            let count = get_byte_count(op);
+        for op in ALL_OPS.iter() {
+            let count = get_byte_count(*op);
             if count > 3 {
                 panic!("Invalid byte count for {}: {}", op, count);
             }

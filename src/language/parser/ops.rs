@@ -63,6 +63,16 @@ impl Op {
         }
     }
 
+    pub const fn new_addrregval(mnemonic: &'static str, opcode_reg: u8, opcode_val: u8) -> Self {
+        Op {
+            mnemonic,
+            variants: [
+                OpVariant::new_single(opcode_reg, Parameters::REGISTERS),
+                OpVariant::new_single(opcode_val, Parameters::NUMBER),
+            ],
+        }
+    }
+
     pub const fn new_single_reg(mnemonic: &'static str, opcode: u8) -> Self {
         Op {
             mnemonic,
@@ -103,7 +113,7 @@ impl Op {
             mnemonic,
             variants: [
                 OpVariant::new_double(opcode_reg_reg, Parameters::DATA_REG, Parameters::DATA_REG),
-                OpVariant::new_single(opcode_addr, Parameters::ADDRESS),
+                OpVariant::new_single(opcode_addr, Parameters::ADDRESSES),
             ],
         }
     }
@@ -122,20 +132,20 @@ impl Op {
         Op {
             mnemonic,
             variants: [
-                OpVariant::new_single(opcode_addr, Parameters::ADDRESSES),
                 OpVariant::new_single(opcode_addr_reg, Parameters::ADDR_REG),
+                OpVariant::new_single(opcode_addr, Parameters::ADDRESSES),
             ],
         }
     }
 }
 
-pub(super) struct OpVariant {
+struct OpVariant {
     opcode: u8,
     params: [Parameters; 2],
 }
 
 impl OpVariant {
-    pub(crate) fn parse(&self, input: &[&str]) -> Result<Vec<Param>> {
+    fn parse(&self, input: &[&str]) -> Result<Vec<Param>> {
         let mut output = vec![];
         if input.len() > 0 {
             output.push(self.params[0].parse(input[0])?);
@@ -148,18 +158,14 @@ impl OpVariant {
 }
 
 impl OpVariant {
-    pub(super) const fn new_single(opcode: u8, param: Parameters) -> Option<Self> {
+    const fn new_single(opcode: u8, param: Parameters) -> Option<Self> {
         Some(OpVariant {
             opcode,
             params: [param, Parameters::NONE],
         })
     }
 
-    pub(super) const fn new_double(
-        opcode: u8,
-        param1: Parameters,
-        param2: Parameters,
-    ) -> Option<Self> {
+    const fn new_double(opcode: u8, param1: Parameters, param2: Parameters) -> Option<Self> {
         Some(OpVariant {
             opcode,
             params: [param1, param2],

@@ -1,5 +1,6 @@
 Fibonacci
 1.0
+const stop_at 12
       PRT 0
       PRTLN
       PRT 1
@@ -12,5 +13,5 @@ loop: ADD D0 D1
 	  CPY D0 D1
 	  CPY D1 ACC
 	  INC D3
-	  CMP D3 12
+	  CMP D3 stop_at
 	  JL loop

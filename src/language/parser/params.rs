@@ -4,7 +4,7 @@ use anyhow::{Error, Result};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Param {
     Empty,
     Number(u8),
@@ -37,7 +37,7 @@ impl Display for Parameters {
             &Parameters::DATA_REG => write!(f, "data_reg"),
             &Parameters::ADDR_REG => write!(f, "addr_reg"),
             &Parameters::LABEL => write!(f, "label"),
-            &Parameters::STRING_KEY => write!(f, "text key"),
+            &Parameters::STRING_KEY => write!(f, "text_key"),
             &Parameters::ADDRESSES => write!(f, "(label|address)"),
             &Parameters::REGISTERS => write!(f, "(data_reg|addr_reg)"),
             _ => write!(f, ""),
@@ -46,7 +46,8 @@ impl Display for Parameters {
 }
 
 impl Parameters {
-    pub fn parse(&self, input: &str) -> Result<Param> {
+    pub(super) fn parse(&self, input: &str) -> Result<Param> {
+        let input = strip_trailing_comment(input);
         match self {
             &Parameters::NONE => {
                 if input.is_empty() {
@@ -85,6 +86,11 @@ impl Parameters {
             _ => panic!("Unhandled param: {:?}", self),
         }
     }
+}
+
+fn strip_trailing_comment(input: &str) -> &str {
+    let parts = input.split("#").collect::<Vec<&str>>();
+    parts[0].trim()
 }
 
 fn parse_data_reg(input: &str) -> Result<Param> {
@@ -151,23 +157,23 @@ mod tests {
 
     #[test]
     fn test_address_parsing() {
-        assert_eq!(parse_addr("@10").unwrap(), 10);
-        assert_eq!(parse_addr("@0").unwrap(), 0);
-        assert_eq!(parse_addr("@100").unwrap(), 100);
-        assert_eq!(parse_addr("@255").unwrap(), 255);
-        assert_eq!(parse_addr("@1000").unwrap(), 1000);
-        assert_eq!(parse_addr("@12000").unwrap(), 12000);
-        assert_eq!(parse_addr("@65535").unwrap(), 65535);
+        assert_eq!(parse_addr("@10").unwrap(), Param::Addr(10));
+        assert_eq!(parse_addr("@0").unwrap(), Param::Addr(0));
+        assert_eq!(parse_addr("@100").unwrap(), Param::Addr(100));
+        assert_eq!(parse_addr("@255").unwrap(), Param::Addr(255));
+        assert_eq!(parse_addr("@1000").unwrap(), Param::Addr(1000));
+        assert_eq!(parse_addr("@12000").unwrap(), Param::Addr(12000));
+        assert_eq!(parse_addr("@65535").unwrap(), Param::Addr(65535));
         assert!(parse_addr("@65536").is_err());
         assert!(parse_addr("@-10").is_err());
         assert!(parse_addr("@test").is_err());
-        assert_eq!(parse_addr("@255").unwrap(), 255);
-        assert_eq!(parse_addr("@xA").unwrap(), 10);
-        assert_eq!(parse_addr("@x0").unwrap(), 0);
-        assert_eq!(parse_addr("@x64").unwrap(), 100);
-        assert_eq!(parse_addr("@xFF").unwrap(), 255);
-        assert_eq!(parse_addr("@xFF00").unwrap(), 65280);
-        assert_eq!(parse_addr("@xFFFF").unwrap(), 65535);
+        assert_eq!(parse_addr("@255").unwrap(), Param::Addr(255));
+        assert_eq!(parse_addr("@xA").unwrap(), Param::Addr(10));
+        assert_eq!(parse_addr("@x0").unwrap(), Param::Addr(0));
+        assert_eq!(parse_addr("@x64").unwrap(), Param::Addr(100));
+        assert_eq!(parse_addr("@xFF").unwrap(), Param::Addr(255));
+        assert_eq!(parse_addr("@xFF00").unwrap(), Param::Addr(65280));
+        assert_eq!(parse_addr("@xFFFF").unwrap(), Param::Addr(65535));
         assert!(parse_addr("@x1FFFF").is_err());
         assert!(parse_addr("@1x2").is_err());
         assert!(parse_addr("a0").is_err());
@@ -177,17 +183,17 @@ mod tests {
 
     #[test]
     fn test_number_parsing() {
-        assert_eq!(parse_number("10").unwrap(), 10);
-        assert_eq!(parse_number("0").unwrap(), 0);
-        assert_eq!(parse_number("100").unwrap(), 100);
-        assert_eq!(parse_number("255").unwrap(), 255);
+        assert_eq!(parse_number("10").unwrap(), Param::Number(10));
+        assert_eq!(parse_number("0").unwrap(), Param::Number(0));
+        assert_eq!(parse_number("100").unwrap(), Param::Number(100));
+        assert_eq!(parse_number("255").unwrap(), Param::Number(255));
         assert!(parse_number("256").is_err());
         assert!(parse_number("1000").is_err());
         assert!(parse_number("-1").is_err());
-        assert_eq!(parse_number("xA").unwrap(), 10);
-        assert_eq!(parse_number("x0").unwrap(), 0);
-        assert_eq!(parse_number("x64").unwrap(), 100);
-        assert_eq!(parse_number("xFF").unwrap(), 255);
+        assert_eq!(parse_number("xA").unwrap(), Param::Number(10));
+        assert_eq!(parse_number("x0").unwrap(), Param::Number(0));
+        assert_eq!(parse_number("x64").unwrap(), Param::Number(100));
+        assert_eq!(parse_number("xFF").unwrap(), Param::Number(255));
         assert!(parse_number("x100").is_err());
         assert!(parse_number("x3e8").is_err());
         assert!(parse_number("xF001").is_err());
@@ -195,13 +201,13 @@ mod tests {
 
     #[test]
     fn test_reg_parsing() {
-        assert_eq!(parse_data_reg("d0").unwrap(), REG_D0);
-        assert_eq!(parse_data_reg("d1").unwrap(), REG_D1);
-        assert_eq!(parse_data_reg("d2").unwrap(), REG_D2);
-        assert_eq!(parse_data_reg("d3").unwrap(), REG_D3);
-        assert_eq!(parse_data_reg("acc").unwrap(), REG_ACC);
-        assert_eq!(parse_addr_reg("a0").unwrap(), REG_A0);
-        assert_eq!(parse_addr_reg("a1").unwrap(), REG_A1);
+        assert_eq!(parse_data_reg("d0").unwrap(), Param::DataReg(REG_D0));
+        assert_eq!(parse_data_reg("d1").unwrap(), Param::DataReg(REG_D1));
+        assert_eq!(parse_data_reg("d2").unwrap(), Param::DataReg(REG_D2));
+        assert_eq!(parse_data_reg("d3").unwrap(), Param::DataReg(REG_D3));
+        assert_eq!(parse_data_reg("acc").unwrap(), Param::DataReg(REG_ACC));
+        assert_eq!(parse_addr_reg("a0").unwrap(), Param::AddrReg(REG_A0));
+        assert_eq!(parse_addr_reg("a1").unwrap(), Param::AddrReg(REG_A1));
         assert!(parse_data_reg("d5").is_err());
         assert!(parse_data_reg("a0").is_err());
         assert!(parse_data_reg("").is_err());
@@ -231,10 +237,7 @@ mod tests {
 
     #[test]
     fn test_addresses_parameter_parsing() {
-        assert_eq!(
-            Parameters::ADDRESSES.parse("@34").unwrap(),
-            Param::Number(34)
-        );
+        assert_eq!(Parameters::ADDRESSES.parse("@34").unwrap(), Param::Addr(34));
     }
 
     #[test]

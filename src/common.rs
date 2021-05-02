@@ -7,6 +7,7 @@ use std::io::stdout;
 use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;
 
+///Read file as bytes
 pub fn read_bytes(path_str: &str) -> Result<Vec<u8>> {
     let path = PathBuf::from(path_str);
 
@@ -22,6 +23,7 @@ pub fn read_bytes(path_str: &str) -> Result<Vec<u8>> {
     }
 }
 
+///Read file as lines
 pub fn read_lines(path_str: &str) -> Result<Vec<String>> {
     let path = PathBuf::from(path_str);
 
@@ -36,19 +38,27 @@ pub fn read_lines(path_str: &str) -> Result<Vec<String>> {
         .collect())
 }
 
+///Removes blank lines and comments
 pub fn clean_up_lines(unprocessed_lines: Vec<String>) -> Vec<String> {
     let mut lines = vec![];
 
     for line in unprocessed_lines {
-        let trimmed = line.trim();
-        if !trimmed.starts_with('#') && !trimmed.is_empty() {
-            lines.push(line);
+        let trimmed = line
+            .trim()
+            .split("#")
+            .next()
+            .unwrap() //This will always succeed as even a blank string when split returns [""]
+            .trim()
+            .to_string();
+        if !trimmed.is_empty() {
+            lines.push(trimmed);
         }
     }
 
     lines
 }
 
+///Move the terminal up one line and to first column
 #[allow(unused_must_use)]
 pub fn reset_cursor() {
     execute!(
@@ -57,4 +67,31 @@ pub fn reset_cursor() {
         MoveToColumn(0),
         Clear(ClearType::CurrentLine)
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_up_lines() {
+        let input = vec![
+            "",
+            "No comment here",
+            "#entirely a comment",
+            "",
+            "not_comment #is comment",
+        ]
+        .into_iter()
+        .map(|line| line.to_string())
+        .collect::<Vec<String>>();
+
+        let results = clean_up_lines(input);
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(
+            results,
+            vec![String::from("No comment here"), String::from("not_comment")]
+        );
+    }
 }

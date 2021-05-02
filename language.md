@@ -1,5 +1,42 @@
 # Language
 
+## TASM file format
+
+```
+<Program Name>
+<Program Version>
+<Strings section marker, optional>
+<string definitions, optional>
+<Ops section marker>
+<ops>
+```
+
+For example
+```asm
+Example Program
+1
+.strings
+answer=Answer:
+.ops
+cpy d0 5
+cpy d1 3
+add d0 d1
+sub acc 1
+prtd answer
+prt acc
+```
+
+Results in `Answer: 7`
+
+#### Comments
+
+Any text following a `#` is ignored
+
+```asm
+#this whole line is ignored
+add acc 1 #only this part is ignored
+```
+
 ## Assembly
 
 * Mnemonics and registers are case insensitive
@@ -12,6 +49,15 @@
 - `num`: `0`-`255` or `x0`-`xFF`
 - `addr`: `@0`-`@65535` or `@x0`-`@xFFFF` 
 - `lbl`: `[a-zA-Z][a-zA-Z0-9_]*`
+
+#### Constants
+
+In the ops section constants can be defined like this
+`const name value`
+
+The name can not be the same as any label, mnemonic or register.
+
+The value must be a valid parameter
 
 ### Math
 
@@ -124,11 +170,11 @@ Copy value from `A1` into registers
 
 Opens specified input file for reading, populates `D3`-`D0` with file size in bytes
 
-`FREAD addr|addr_reg`
+`FILER addr|addr_reg`
 
 Reads up to `ACC` bytes from file cursor and save at `addr` in memory, populates `ACC` with number of bytes actually read
 
-`FWRITE addr|addr_reg`
+`FILEW addr|addr_reg`
 
 Reads up to `ACC` bytes from memory starting `addr` in memory to file cursor, populates `ACC` with number of bytes actually written
 
@@ -158,10 +204,18 @@ Push value from register or number on to stack. Decrements SP by 1
 
 Pop value from stack and populates register. Increments SP by 1
 
+`ARG reg|addr_reg num|reg`
+
+Get 1 or 2 bytes (depending on if 1st param is reg or addr reg) from 2nd param bytes before the frame pointer
+
+*See stack example for more info*
+
 ### Misc
 
 `NOP`
 
 Do nothing
 
-##
+`HALT`
+
+Prevents the device executing any further and in normal operation terminates the program

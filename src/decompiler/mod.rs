@@ -63,7 +63,7 @@ pub fn start(path: &str) -> Result<()> {
     let (strings, unused) = collect_strings(&tape.ops, &tape.data);
 
     println!(
-        "{}b ops, {}b data ({}b indirectly referenced or unused)",
+        "{}b ops, {}b data ({}b unused or possibly indirectly referenced)",
         tape.ops.len(),
         tape.data.len(),
         unused
@@ -76,6 +76,7 @@ pub fn start(path: &str) -> Result<()> {
     let jmp_target = collect_jump_targets(&tape.ops);
 
     let mut pc = 0;
+    println!("byte  addr op      param1 param2");
     while !tape.ops.is_empty() {
         let op = decode(&mut tape.ops, &tape.data, pc, jmp_target.contains(&pc));
         let lbl = if op.is_jump_target {
@@ -84,7 +85,7 @@ pub fn start(path: &str) -> Result<()> {
             String::from("    ")
         };
         println!(
-            "{: <3} {} {:<6}  {:<5}  {:<5}",
+            "{: <4}  {} {:<6}  {:<5}  {:<5}",
             pc, lbl, op.strings[0], op.strings[1], op.strings[2]
         );
         pc += get_byte_count(op.bytes[0]);

@@ -31,15 +31,15 @@ bitflags! {
 
 impl Display for Parameters {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            &Parameters::NUMBER => write!(f, "byte"),
-            &Parameters::ADDRESS => write!(f, "address"),
-            &Parameters::DATA_REG => write!(f, "data_reg"),
-            &Parameters::ADDR_REG => write!(f, "addr_reg"),
-            &Parameters::LABEL => write!(f, "label"),
-            &Parameters::STRING_KEY => write!(f, "text_key"),
-            &Parameters::ADDRESSES => write!(f, "(label|address)"),
-            &Parameters::REGISTERS => write!(f, "(data_reg|addr_reg)"),
+        match *self {
+            Parameters::NUMBER => write!(f, "byte"),
+            Parameters::ADDRESS => write!(f, "address"),
+            Parameters::DATA_REG => write!(f, "data_reg"),
+            Parameters::ADDR_REG => write!(f, "addr_reg"),
+            Parameters::LABEL => write!(f, "label"),
+            Parameters::STRING_KEY => write!(f, "text_key"),
+            Parameters::ADDRESSES => write!(f, "(label|address)"),
+            Parameters::REGISTERS => write!(f, "(data_reg|addr_reg)"),
             _ => write!(f, ""),
         }
     }
@@ -48,21 +48,21 @@ impl Display for Parameters {
 impl Parameters {
     pub(super) fn parse(&self, input: &str) -> Result<Param> {
         let input = strip_trailing_comment(input);
-        match self {
-            &Parameters::NONE => {
+        match *self {
+            Parameters::NONE => {
                 if input.is_empty() {
                     Ok(Param::Empty)
                 } else {
                     Err(Error::msg(format!("Expected nothing, found {}", input)))
                 }
             }
-            &Parameters::NUMBER => parse_number(input),
-            &Parameters::DATA_REG => parse_data_reg(input),
-            &Parameters::ADDR_REG => parse_addr_reg(input),
-            &Parameters::ADDRESS => parse_addr(input),
-            &Parameters::LABEL => Ok(Param::Label(input.to_string())),
-            &Parameters::STRING_KEY => Ok(Param::StrKey(input.to_string())),
-            &Parameters::REGISTERS => {
+            Parameters::NUMBER => parse_number(input),
+            Parameters::DATA_REG => parse_data_reg(input),
+            Parameters::ADDR_REG => parse_addr_reg(input),
+            Parameters::ADDRESS => parse_addr(input),
+            Parameters::LABEL => Ok(Param::Label(input.to_string())),
+            Parameters::STRING_KEY => Ok(Param::StrKey(input.to_string())),
+            Parameters::REGISTERS => {
                 let data = parse_data_reg(input);
                 let addr = parse_addr_reg(input);
                 if data.is_ok() {
@@ -76,7 +76,7 @@ impl Parameters {
                     input
                 )))
             }
-            &Parameters::ADDRESSES => {
+            Parameters::ADDRESSES => {
                 if let Ok(addr) = parse_addr(input) {
                     Ok(addr)
                 } else {
@@ -89,7 +89,7 @@ impl Parameters {
 }
 
 fn strip_trailing_comment(input: &str) -> &str {
-    let parts = input.split("#").collect::<Vec<&str>>();
+    let parts = input.split('#').collect::<Vec<&str>>();
     parts[0].trim()
 }
 
@@ -116,7 +116,7 @@ fn parse_addr_reg(input: &str) -> Result<Param> {
 }
 
 fn parse_number(input: &str) -> Result<Param> {
-    let num = if input.starts_with("x") {
+    let num = if input.starts_with('x') {
         let hex = input.chars().skip(1).collect::<String>();
         u8::from_str_radix(&hex, 16)
     } else {
@@ -136,7 +136,7 @@ fn parse_addr(input: &str) -> Result<Param> {
         return Err(Error::msg("Address must start with @"));
     }
     let input = input.chars().skip(1).collect::<String>();
-    let num = if input.starts_with("x") {
+    let num = if input.starts_with('x') {
         let hex = input.chars().skip(1).collect::<String>();
         u16::from_str_radix(&hex, 16)
     } else {

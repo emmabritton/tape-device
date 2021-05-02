@@ -146,7 +146,7 @@ impl Device {
             Err(err) => {
                 self.elog(&format!("\nFatal error at byte {}:", self.pc));
                 self.elog(&format!("{}", err));
-                self.elog(&format!("\nInstructions:"));
+                self.elog("\nInstructions:");
                 let mut output = String::new();
                 let mut idx = 0;
                 let start = self.pc.saturating_sub(9);
@@ -160,7 +160,7 @@ impl Device {
                 self.elog(&output);
                 self.elog(&format!("{1: >0$}", idx + 2, "^^"));
                 let dump = self.dump();
-                self.elog(&format!("\nDump:"));
+                self.elog("\nDump:");
                 self.elog(&format!(
                     "ACC: {:02X}  D0: {:02X}  D1: {:02X}  D2: {:02X}  D3: {:02X} A0: {:04X} A1: {:04X}",
                     dump.acc, dump.data_reg[0], dump.data_reg[1], dump.data_reg[2], dump.data_reg[3], dump.addr_reg[0], dump.addr_reg[1]
@@ -179,12 +179,10 @@ impl Device {
     fn cond_jump(&mut self, should_jump: bool, addr: u16, from_areg: bool) {
         if should_jump {
             self.jump(addr)
+        } else if from_areg {
+            self.pc += 2;
         } else {
-            if from_areg {
-                self.pc += 2;
-            } else {
-                self.pc += 3;
-            }
+            self.pc += 3;
         }
     }
 
@@ -369,8 +367,8 @@ impl Device {
             acc: self.acc,
             sp: self.sp,
             fp: self.fp,
-            data_reg: self.data_reg.clone(),
-            addr_reg: self.addr_reg.clone(),
+            data_reg: self.data_reg,
+            addr_reg: self.addr_reg,
             overflow: self.flags.overflow,
         }
     }
@@ -635,9 +633,7 @@ impl Device {
     }
 
     fn swap_addr_reg(&mut self) {
-        let a1 = self.addr_reg[1];
-        self.addr_reg[1] = self.addr_reg[0];
-        self.addr_reg[0] = a1;
+        self.addr_reg.swap(0, 1);
     }
 
     fn change(&mut self, id: u8, diff: isize) -> Result<()> {
@@ -735,18 +731,16 @@ impl Device {
     fn stack_push_reg(&mut self, reg: u8) -> Result<()> {
         if matches!(reg, REG_ACC | REG_D0 | REG_D1 | REG_D2 | REG_D3) {
             self.stack_push(self.get_reg(reg)?);
+        } else if reg == REG_A0 {
+            let bytes = self.addr_reg[0].to_be_bytes();
+            self.sp_add(bytes[0]);
+            self.sp_add(bytes[1]);
+        } else if reg == REG_A1 {
+            let bytes = self.addr_reg[1].to_be_bytes();
+            self.sp_add(bytes[0]);
+            self.sp_add(bytes[1]);
         } else {
-            if reg == REG_A0 {
-                let bytes = self.addr_reg[0].to_be_bytes();
-                self.sp_add(bytes[0]);
-                self.sp_add(bytes[1]);
-            } else if reg == REG_A1 {
-                let bytes = self.addr_reg[1].to_be_bytes();
-                self.sp_add(bytes[0]);
-                self.sp_add(bytes[1]);
-            } else {
-                return Err(Error::msg(format!("Invalid register: {:02X}", reg)));
-            }
+            return Err(Error::msg(format!("Invalid register: {:02X}", reg)));
         }
 
         Ok(())
@@ -829,8 +823,7 @@ mod test {
     use super::*;
     use crate::constants::compare::{EQUAL, LESSER};
     use crate::constants::hardware::REG_ACC;
-    use crate::printer::{DebugPrinter, StdoutPrinter};
-    use tempfile::NamedTempFile;
+    use crate::printer::DebugPrinter;
 
     fn assert_step_device(name: &str, device: &mut Device, dump: Dump) {
         assert!(device.step(), "step for {}", name);

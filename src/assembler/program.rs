@@ -39,7 +39,7 @@ fn process_constants(lines: Vec<String>) -> Result<(Vec<String>, Vec<String>)> {
     let mut processed_ops = vec![];
 
     for op in ops {
-        let parts = op.split(":").collect::<Vec<&str>>();
+        let parts = op.split(':').collect::<Vec<&str>>();
         let (label, mut op) = match parts.len() {
             1 => (
                 String::new(),
@@ -93,12 +93,10 @@ pub(super) fn assemble(lines: Vec<String>, strings_data: HashMap<String, u16>) -
                         " with label on line '{}': {}",
                         line, err
                     )));
+                } else if labels.contains_key(lbl) {
+                    labels.get_mut(lbl).unwrap().0 = Some(program.len());
                 } else {
-                    if labels.contains_key(lbl) {
-                        labels.get_mut(lbl).unwrap().0 = Some(program.len());
-                    } else {
-                        labels.insert(lbl.to_string(), (Some(program.len()), vec![]));
-                    }
+                    labels.insert(lbl.to_string(), (Some(program.len()), vec![]));
                 }
 
                 parts[1]
@@ -184,11 +182,7 @@ fn decode(
                 result.push(bytes[1]);
             }
             Param::Label(lbl) => {
-                if labels.contains_key(&lbl) {
-                    labels.get_mut(&lbl).unwrap().1.push(pc);
-                } else {
-                    labels.insert(lbl, (None, vec![pc]));
-                }
+                labels.entry(lbl).or_insert((None, vec![])).1.push(pc);
                 result.push(0);
                 result.push(0);
             }

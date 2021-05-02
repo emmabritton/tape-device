@@ -15,6 +15,7 @@ pub trait Printer {
 pub struct StdoutPrinter;
 
 impl StdoutPrinter {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> RcBox<dyn Printer> {
         Rc::new(RefCell::new(Box::new(StdoutPrinter {})))
     }
@@ -54,6 +55,7 @@ pub struct DebugPrinter {
 }
 
 impl DebugPrinter {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> RcBox<dyn Printer> {
         Rc::new(RefCell::new(Box::new(DebugPrinter::default())))
     }
@@ -69,7 +71,7 @@ impl Printer for DebugPrinter {
     }
 
     fn newline(&mut self) {
-        self.output.push_str("\n");
+        self.output.push('\n');
         self.lines += 1;
     }
 

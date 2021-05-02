@@ -45,7 +45,7 @@ pub fn clean_up_lines(unprocessed_lines: Vec<String>) -> Vec<String> {
     for line in unprocessed_lines {
         let trimmed = line
             .trim()
-            .split("#")
+            .split('#')
             .next()
             .unwrap() //This will always succeed as even a blank string when split returns [""]
             .trim()

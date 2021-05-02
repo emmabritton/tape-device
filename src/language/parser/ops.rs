@@ -15,20 +15,16 @@ impl Op {
 
     pub fn error_text(&self) -> String {
         let mut output = format!("{} supports:", self.mnemonic);
-        for variant in self.variants.iter() {
-            if let Some(variant) = variant {
-                output.push_str(&format!("\n{} {}", self.mnemonic, variant))
-            }
+        for variant in self.variants.iter().flatten() {
+            output.push_str(&format!("\n{} {}", self.mnemonic, variant))
         }
-        return output;
+        output
     }
 
     pub fn parse(&self, parts: &[&str]) -> Option<(u8, Vec<Param>)> {
-        for variant in self.variants.iter() {
-            if let Some(variant) = variant {
-                if let Ok(params) = variant.parse(&parts) {
-                    return Some((variant.opcode, params));
-                }
+        for variant in self.variants.iter().flatten() {
+            if let Ok(params) = variant.parse(&parts) {
+                return Some((variant.opcode, params));
             }
         }
         None
@@ -145,6 +141,7 @@ struct OpVariant {
 }
 
 impl OpVariant {
+    #[allow(clippy::len_zero)]
     fn parse(&self, input: &[&str]) -> Result<Vec<Param>> {
         let mut output = vec![];
         if input.len() > 0 {

@@ -94,7 +94,7 @@ pub fn start(path: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn collect_strings(ops: &Vec<u8>, data: &Vec<u8>) -> (Vec<String>, usize) {
+pub fn collect_strings(ops: &[u8], data: &[u8]) -> (Vec<String>, usize) {
     let mut op_idx = 0;
     let mut addresses = HashSet::new();
     while op_idx < ops.len() {
@@ -116,7 +116,7 @@ pub fn collect_strings(ops: &Vec<u8>, data: &Vec<u8>) -> (Vec<String>, usize) {
     (results, data.len() - bytes_accounted)
 }
 
-pub fn collect_jump_targets(ops: &Vec<u8>) -> Vec<usize> {
+pub fn collect_jump_targets(ops: &[u8]) -> Vec<usize> {
     let mut jmp_target = vec![];
     for op in ops.windows(3) {
         if matches!(
@@ -201,7 +201,7 @@ pub fn decode(
         _ => ("???", String::new(), String::new()),
     };
     Decoded::new(
-        op.clone(),
+        op,
         vec![op_str.to_string(), p1_str, p2_str],
         line_num,
         is_jump_target,

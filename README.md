@@ -8,7 +8,7 @@ Language for fictional computer with no screen or input devices that executes pr
   - Special: ACC (Accumulator)
   - 8 bit: D0, D1, D2, D3
   - 16 bit: A0, A1
-  - Internal (not directly accessible:
+  - Internal (not directly accessible):
     - FP: Frame pointer
     - SP: Stack pointer
     - Overflow: Overflow flag
@@ -33,7 +33,7 @@ Prints `3`
 
 **Execute program**
 ```
-tape-device program.tape <input>
+tape-device program.tape [input]
 ```
 
 **Assemble program**
@@ -48,5 +48,5 @@ tape-device decompile program.tape
 
 **Debug program** (Must be run from a terminal)
 ```
-tape-device debug program.tape <input>
+tape-device debug program.tape [input]
 ```

@@ -519,11 +519,7 @@ impl Device {
             return Err(Error::msg("File already open"));
         }
         return if let Some(path) = &self.input_data {
-            let mut file = OpenOptions::new()
-                .read(true)
-                .write(true)
-                .truncate(true)
-                .open(path)?;
+            let mut file = OpenOptions::new().read(true).write(true).open(path)?;
             let pos = file
                 .seek(SeekFrom::End(0))
                 .expect("Unable to get file length");

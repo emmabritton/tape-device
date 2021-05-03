@@ -1,14 +1,14 @@
 Hello World Examples
 1
 ###
-# Don't forget to run with the .dat file
-# i.e `./tape-device hello_world_examples.tape hello_world_examples.dat`
+# Don't forget to run with the .dat
+# e.g. ./tape-device hello_world_examples.tape hello_world_examples.dat
 ###
 .strings
-ex_string=This is from a string in the .strings section
+ex_string=This is from a string in the .strings section:
 greeting=Hello, World!
-ex_mem=This is from data loaded into memory and read back out as chars
-ex_file=This is from data loaded from a file and read out as chars
+ex_mem=This is from data loaded into memory and read back out as chars:
+ex_file=This is from data loaded from a file and read out as chars:
 .ops
         #Print string data example
         PRTD ex_string     #print string named ex_string
@@ -70,6 +70,8 @@ clear:  memw a0            #write value in ACC to memory at address in A0
 
         #Read from file
         #Program will crash if file not available
+        prtd ex_file       #print string named ex_file
+        prtln              #newline
         fopen              #Open file
         cpy acc 10         #Set ACC to 10, this is used by filer as the max byte read count
         filer @0           #Read bytes from read and save in memory at address in A0
@@ -82,5 +84,3 @@ fprint: memr a0            #read value from memory at address in A0 and set in A
         jne fprint         #if they were not equal jump to fprint
         PRTLN              #newline
 
-
-        PRTLN

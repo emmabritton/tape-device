@@ -166,10 +166,12 @@ impl Device {
                     dump.acc, dump.data_reg[0], dump.data_reg[1], dump.data_reg[2], dump.data_reg[3], dump.addr_reg[0], dump.addr_reg[1]
                 ));
                 self.elog(&format!(
-                    "PC: {:4} SP: {:4X} File open: {}",
+                    "PC: {:4} SP: {:4X} FP: {:4X} File open: {} Overflowed: {}",
                     dump.pc,
                     dump.sp,
-                    self.file.is_some()
+                    dump.fp,
+                    self.file.is_some(),
+                    dump.overflow
                 ));
                 false
             }

@@ -8,7 +8,7 @@ use std::collections::HashSet;
 pub struct Decoded {
     pub bytes: Vec<u8>,
     pub strings: Vec<String>,
-    pub line_num: usize,
+    pub byte_offset: usize,
     pub is_jump_target: bool,
 }
 
@@ -16,13 +16,13 @@ impl Decoded {
     pub fn new(
         bytes: Vec<u8>,
         strings: Vec<String>,
-        line_num: usize,
+        byte_offset: usize,
         is_jump_target: bool,
     ) -> Self {
         Decoded {
             bytes,
             strings,
-            line_num,
+            byte_offset,
             is_jump_target,
         }
     }
@@ -80,7 +80,7 @@ pub fn start(path: &str) -> Result<()> {
     while !tape.ops.is_empty() {
         let op = decode(&mut tape.ops, &tape.data, pc, jmp_target.contains(&pc));
         let lbl = if op.is_jump_target {
-            format!("{:04X}", op.line_num)
+            format!("{:04X}", op.byte_offset)
         } else {
             String::from("    ")
         };
@@ -133,7 +133,7 @@ pub fn collect_jump_targets(ops: &[u8]) -> Vec<usize> {
 pub fn decode(
     bytes: &mut Vec<u8>,
     strings: &[u8],
-    line_num: usize,
+    byte_offset: usize,
     is_jump_target: bool,
 ) -> Decoded {
     let mut op = vec![];
@@ -205,7 +205,7 @@ pub fn decode(
     Decoded::new(
         op,
         vec![op_str.to_string(), p1_str, p2_str],
-        line_num,
+        byte_offset,
         is_jump_target,
     )
 }

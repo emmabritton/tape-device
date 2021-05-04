@@ -123,7 +123,7 @@ impl Debugger {
     fn generate_ops_string(&self, current: usize) -> Vec<Text> {
         let addr_prefix = |op: &Decoded| {
             if op.is_jump_target {
-                self.f16bit(op.line_num as u16)
+                self.f16bit(op.byte_offset as u16)
             } else {
                 String::from("     ")
             }
@@ -142,8 +142,7 @@ impl Debugger {
         return if self.show_asm {
             self.decoded
                 .iter()
-                .enumerate()
-                .map(|(idx, op)| {
+                .map(|op| {
                     let text = if op.is_param_16_bit() {
                         let param = u16::from_be_bytes([op.bytes[1], op.bytes[2]]);
                         format!(
@@ -161,14 +160,13 @@ impl Debugger {
                             self.f8bit_str(&op.strings[2])
                         )
                     };
-                    format_span(idx == current, text)
+                    format_span(op.byte_offset == current, text)
                 })
                 .collect::<Vec<Text>>()
         } else {
             self.decoded
                 .iter()
-                .enumerate()
-                .map(|(idx, op)| {
+                .map(|op| {
                     let addr = addr_prefix(&op);
                     let text = if op.is_param_16_bit() {
                         let param = u16::from_be_bytes([op.bytes[1], op.bytes[2]]);
@@ -187,7 +185,7 @@ impl Debugger {
                             self.f8bit(op.bytes[2])
                         )
                     };
-                    format_span(idx == current, text)
+                    format_span(op.byte_offset == current, text)
                 })
                 .collect::<Vec<Text>>()
         };

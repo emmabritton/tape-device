@@ -110,7 +110,7 @@ pub fn get_byte_count(opcode: u8) -> usize {
         | CPY_A0_REG_REG | CPY_A0_ADDR | CPY_A1_REG_REG | CPY_A1_ADDR | LDA0_REG_REG
         | LDA1_REG_REG | JMP_ADDR | JE_ADDR | JNE_ADDR | JL_ADDR | JG_ADDR | OVER_ADDR
         | NOVER_ADDR | CMP_REG_REG | CMP_REG_VAL | MEMR_ADDR | MEMW_ADDR | CALL_ADDR | PRTD_STR
-        | FILER_ADDR | FILEW_ADDR | FSKIP_REG => 3,
+        | FILER_ADDR | FILEW_ADDR | FSKIP_REG | ARG_REG_VAL | ARG_REG_REG => 3,
         _ => panic!("Unknown opcode: {}", opcode),
     }
 }
@@ -144,7 +144,7 @@ mod tests {
     use crate::constants::get_byte_count;
     use std::collections::HashSet;
 
-    const ALL_OPS: [u8; 57] = [
+    const ALL_OPS: [u8; 59] = [
         ADD_REG_REG,
         ADD_REG_VAL,
         SUB_REG_REG,
@@ -202,6 +202,8 @@ mod tests {
         FSKIP_REG,
         NOP,
         HALT,
+        ARG_REG_VAL,
+        ARG_REG_REG,
     ];
 
     #[test]

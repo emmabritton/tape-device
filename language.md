@@ -190,23 +190,27 @@ Move file cursor to `[D3][D2][D1][D0]` (0..4294967295)
 
 `CALL addr_reg|label|addr`
 
-Jumps to address provided and pushes return address (pc + 1) to stack. Increments SP by 2 
+Jumps to address provided and pushes return address (pc + 1) to stack. 
 
 `RET`
 
-Pops last two bytes from stack and jumps to them. Decrements SP by 2
+Pops last two bytes from stack and jumps to them.
 
 `PUSH reg|num`
 
-Push value from register or number on to stack. Decrements SP by 1
+Push value from register or number on to stack.
 
 `POP reg`
 
-Pop value from stack and populates register. Increments SP by 1
+Pop value from stack and populates register.
 
 `ARG reg|addr_reg num|reg`
 
 Get 1 or 2 bytes (depending on if 1st param is reg or addr reg) from 2nd param bytes before the frame pointer
+
+To get first call `ARG <reg> 1`, if the first param 1 byte then the second param is `ARG <reg> 2` otherwise call `ARG <reg> 3` and so on
+
+This instruction does not alter data on the stack or move the SP or FP.
 
 *See stack example for more info*
 

@@ -763,8 +763,17 @@ impl Device {
     }
 
     fn stack_arg(&mut self, reg: u8, offset: u8) -> Result<()> {
-        let addr = self.fp.saturating_add(offset as u16) as usize;
-        let addr_second = self.fp.saturating_add((offset.saturating_add(1)) as u16) as usize;
+        let addr = self.fp.saturating_add(offset.saturating_add(3) as u16) as usize;
+        let addr_second = self.fp.saturating_add((offset.saturating_add(4)) as u16) as usize;
+        if addr >= SP_MAX as usize
+            || ((reg == REG_A0 || reg == REG_A1) && addr_second >= SP_MAX as usize)
+        {
+            return Err(Error::msg(format!(
+                "Attempted to access argument beyond memory {}, max {}",
+                addr,
+                SP_MAX - 1
+            )));
+        }
         match reg {
             REG_ACC => self.acc = self.mem[addr],
             REG_D0 => self.data_reg[0] = self.mem[addr],
@@ -847,7 +856,10 @@ mod test {
     use crate::printer::DebugPrinter;
 
     fn assert_step_device(name: &str, device: &mut Device, dump: Dump) {
-        assert!(device.step(), "step for {}", name);
+        if !device.step() {
+            eprintln!("{}", device.printer.borrow().error_output());
+            panic!("step for {}", name);
+        }
         assert_eq!(device.dump(), dump, "dump for {}", name);
     }
 
@@ -965,9 +977,17 @@ mod test {
 
     #[test]
     #[rustfmt::skip]
-    fn test_stack() {
+    fn test_stack_pushpop() {
         let ops = vec![
-            PUSH_VAL, 5, CPY_REG_VAL, REG_ACC, 10, PUSH_REG, REG_ACC
+            PUSH_VAL, 5, 
+            CPY_REG_VAL, REG_ACC, 10, 
+            PUSH_REG, REG_ACC, 
+            POP_REG, REG_D1,
+            CALL_ADDR, 0,15,
+            POP_REG, REG_D3,
+            HALT,
+            /*method @15*/ARG_REG_VAL,REG_D2,1,
+            RET,
         ];
         let printer = DebugPrinter::new();
         let mut device = Device::new(ops, vec![], None, printer.clone());
@@ -982,7 +1002,23 @@ mod test {
         assert_step_device("PUSH ACC", &mut device, Dump {pc: 7,sp:SP_MAX - 2,acc:10,..Dump::default()});
         device.assert_mem(SP_MAX-1, 5);
         device.assert_mem(SP_MAX - 2, 10);
-        
+        assert_step_device("POP D1", &mut device, Dump {pc: 9,sp:SP_MAX - 1,acc:10,data_reg:[0,10,0,0],..Dump::default()});
+        device.assert_mem(SP_MAX-1, 5);
+        assert_step_device("CALL @13", &mut device, Dump {pc: 15,sp:SP_MAX - 5,acc:10,data_reg:[0,10,0,0],fp:65530,..Dump::default()});
+        device.assert_mem(SP_MAX-1, 5);
+        device.assert_mem(SP_MAX-2, 0xff);
+        device.assert_mem(SP_MAX-3, 0xff);
+        device.assert_mem(SP_MAX-4, 0);
+        device.assert_mem(SP_MAX-5, 12);
+        assert_step_device("ARG D2 0", &mut device, Dump {pc: 18,sp:SP_MAX - 5,acc:10,data_reg:[0,10,5,0],fp:65530,..Dump::default()});
+        assert_step_device("RET", &mut device, Dump {pc: 12,sp:SP_MAX - 1,acc:10,data_reg:[0,10,5,0],fp:SP_MAX,..Dump::default()});
+        device.assert_mem(SP_MAX-1, 5);
+        device.assert_mem(SP_MAX-2, 0xff);
+        device.assert_mem(SP_MAX-3, 0xff);
+        device.assert_mem(SP_MAX-4, 0);
+        device.assert_mem(SP_MAX-5, 12);
+        assert_step_device("POP D3", &mut device, Dump {pc: 14,sp:SP_MAX,acc:10,data_reg:[0,10,5,5],fp:SP_MAX,..Dump::default()});
+        device.assert_mem(SP_MAX-1, 5);
 
         assert_eq!(printer.borrow().output(), String::new());
         assert_eq!(printer.borrow().error_output(), String::new());

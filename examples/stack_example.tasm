@@ -1,0 +1,59 @@
+Stack Example
+1
+.strings
+first=Push 1-5, then pop and print
+dots_1=Printing
+dots_2=dots twice
+dot=.
+.ops
+const space 32
+
+		push 1
+		push 2
+		push 3
+		push 4
+	   	push 5
+		cpy d0 5
+		prtd first
+		prtln
+loop:	pop d3				#This prints 54321
+		prt d3			    #as stack is LIFO
+		dec d0
+		cmp d0 0
+		je next
+		jmp loop
+
+next: 	prtln
+		push 6  			#push to stack, never used
+		push 2				#push to stack, used by dot_printer
+		call dots
+		pop acc 			#throw away param as used
+		push 3				#push to stack, used by dot_printer
+		call dots
+		pop acc				#throw away param as used
+		halt
+
+dots:   arg d3 1            #get param from stack (doesn't move SP or FP)
+
+		prtln 				#
+		prtd dots_1         #
+		prtc space          #print something like
+		prt d3			    #Printing 2 dots
+		prtc space			#
+		prtd dots_2			#
+		prtln				#
+
+		add d3 d3
+		push acc			# copy arg on to stack for next call
+		call inner
+		prtln
+		pop acc
+		ret
+
+inner:  arg d3 1			#get param from stack
+iloop:	dec d3
+		prtd dot
+		cmp d3 0
+		jne iloop
+		ret
+

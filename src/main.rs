@@ -10,7 +10,6 @@ use git_version::git_version;
 mod assembler;
 mod common;
 mod constants;
-mod debugger;
 mod decompiler;
 mod device;
 mod language;
@@ -54,23 +53,6 @@ fn main() -> Result<()> {
             ),
         )
         .subcommand(
-            SubCommand::with_name("debug")
-                .arg(
-                    Arg::with_name("tape")
-                        .help("Device tape to debug")
-                        .takes_value(true)
-                        .multiple(false)
-                        .required(true),
-                )
-                .arg(
-                    Arg::with_name("input")
-                        .help("Data tape for reading/writing")
-                        .takes_value(true)
-                        .multiple(false)
-                        .required(false),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("run")
                 .arg(
                     Arg::with_name("tape")
@@ -107,8 +89,6 @@ fn main() -> Result<()> {
         device::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;
     } else if let Some(matches) = matches.subcommand_matches("run") {
         device::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;
-    } else if let Some(matches) = matches.subcommand_matches("debug") {
-        debugger::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;
     } else if let Some(matches) = matches.subcommand_matches("assemble") {
         assembler::start(
             matches.value_of("file").unwrap(),

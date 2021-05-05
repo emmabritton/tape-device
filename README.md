@@ -45,8 +45,3 @@ tape-device assemble program.tasm
 ```
 tape-device decompile program.tape
 ```
-
-**Debug program** (Must be run from a terminal)
-```
-tape-device debug program.tape [input]
-```

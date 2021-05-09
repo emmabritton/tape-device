@@ -9,9 +9,15 @@ ex_string=This is from a string in the .strings section:
 greeting=Hello, World!
 ex_mem=This is from data loaded into memory and read back out as chars:
 ex_file=This is from data loaded from a file and read out as chars:
+file_error=No input file, check note at top of tasm file
 .ops
+        fchk prog
+        prtln
+        prtd file_error
+        prtln
+        halt
         #Print string data example
-        PRTD ex_string     #print string named ex_string
+prog:   PRTD ex_string     #print string named ex_string
         PRTLN              #newline
         PRTD greeting      #print string named greeting
         PRTLN              #newline

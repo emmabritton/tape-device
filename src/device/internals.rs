@@ -6,9 +6,11 @@ use crate::printer::{Printer, RcBox};
 use anyhow::{Error, Result};
 use std::cmp::Ordering;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{stdin, Read, Seek, SeekFrom, Write};
+use std::time::Duration;
 
 const SP_MAX: u16 = u16::MAX;
+const KEY_CODE_RETURN: u8 = 10;
 
 pub struct Device {
     mem: [u8; RAM_SIZE],
@@ -20,8 +22,8 @@ pub struct Device {
     acc: u8,
     sp: u16,
     fp: u16,
-    data_reg: [u8; DATA_REG_SIZE],
-    addr_reg: [u16; ADDR_REG_SIZE],
+    data_reg: [u8; DATA_REG_COUNT],
+    addr_reg: [u16; ADDR_REG_COUNT],
     file: Option<File>,
     breakpoints: Vec<u16>,
     printer: RcBox<dyn Printer>,
@@ -33,8 +35,8 @@ pub struct Dump {
     pub acc: u8,
     pub sp: u16,
     pub fp: u16,
-    pub data_reg: [u8; DATA_REG_SIZE],
-    pub addr_reg: [u16; ADDR_REG_SIZE],
+    pub data_reg: [u8; DATA_REG_COUNT],
+    pub addr_reg: [u16; ADDR_REG_COUNT],
     pub overflow: bool,
 }
 
@@ -73,8 +75,8 @@ impl Device {
             mem: [0; RAM_SIZE],
             flags: Flags::default(),
             acc: 0,
-            data_reg: [0; DATA_REG_SIZE],
-            addr_reg: [0; ADDR_REG_SIZE],
+            data_reg: [0; DATA_REG_COUNT],
+            addr_reg: [0; ADDR_REG_COUNT],
             pc: 0,
             sp: SP_MAX,
             fp: SP_MAX,
@@ -352,6 +354,25 @@ impl Device {
                 .copy_addr_reg_val(REG_A0, addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
             CPY_A1_ADDR => self
                 .copy_addr_reg_val(REG_A1, addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
+            IPOLL_ADDR => {
+                self.poll_input(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]), false)?
+            }
+            IPOLL_AREG => self.poll_input(self.get_addr_reg(self.tape_ops[idx + 1])?, true)?,
+            RCHR_REG => self.read_char(self.tape_ops[idx + 1])?,
+            RSTR_ADDR => self.read_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
+            RSTR_AREG => self.read_string(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
+            PSTR_ADDR => self.print_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
+            PSTR_AREG => self.print_string(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
+            FCHK_ADDR => self.cond_jump(
+                self.input_data.is_some(),
+                addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
+                false,
+            ),
+            FCHK_AREG => self.cond_jump(
+                self.input_data.is_some(),
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                true,
+            ),
             _ => {
                 return Err(Error::msg(format!(
                     "Unknown instruction: {:02X}",
@@ -496,6 +517,60 @@ impl Device {
                     addr_reg
                 )))
             }
+        }
+
+        Ok(())
+    }
+
+    fn poll_input(&mut self, addr: u16, from_areg: bool) -> Result<()> {
+        if crossterm::event::poll(Duration::from_millis(100))? {
+            self.jump(addr)
+        } else if from_areg {
+            self.pc += 2;
+        } else {
+            self.pc += 3;
+        }
+
+        Ok(())
+    }
+
+    fn read_string(&mut self, addr: u16) -> Result<()> {
+        let mut char = [0_u8; 1];
+        let mut read_count = 0;
+        stdin().read(&mut char)?;
+        while read_count < 255 && char[0] != KEY_CODE_RETURN {
+            let mem = addr as usize + read_count;
+            self.mem[mem] = char[0];
+            stdin().read(&mut char)?;
+            read_count += 1;
+        }
+        self.acc = read_count as u8;
+
+        Ok(())
+    }
+
+    fn print_string(&mut self, addr: u16) -> Result<()> {
+        let start = addr as usize;
+        let end = (addr + self.acc as u16) as usize;
+        self.log(
+            String::from_utf8_lossy(&self.mem[start..end])
+                .to_string()
+                .as_str(),
+        );
+        Ok(())
+    }
+
+    fn read_char(&mut self, reg: u8) -> Result<()> {
+        let mut char = [0_u8; 1];
+        stdin().read(&mut char)?;
+
+        match reg {
+            REG_ACC => self.acc = char[0],
+            REG_D0 => self.data_reg[0] = char[0],
+            REG_D1 => self.data_reg[1] = char[0],
+            REG_D2 => self.data_reg[2] = char[0],
+            REG_D3 => self.data_reg[3] = char[0],
+            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg))),
         }
 
         Ok(())

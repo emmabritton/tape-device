@@ -1,7 +1,7 @@
 use crate::constants::code::*;
 use crate::language::parser::ops::Op;
 
-pub(super) const OPS: [Op; 37] = [
+pub(super) const OPS: [Op; 42] = [
     //CPY reg reg|val
     //Copy value from 2nd param to 1st
     Op::new_reg_val("CPY", CPY_REG_REG, CPY_REG_VAL),
@@ -113,4 +113,19 @@ pub(super) const OPS: [Op; 37] = [
     //POP addr_reg|reg reg|val
     //Read from value from stack 2nd param bytes before the FP and save to 1st param
     Op::new_addrreg_regval("ARG", ARG_REG_REG, ARG_REG_VAL),
+    //IPOLL addr_reg|addr
+    //Jump to 1st param if at least one char can be read from keyboard
+    Op::new_jmp("IPOLL", IPOLL_ADDR, IPOLL_AREG),
+    //FCHK addr_reg|addr
+    //Jump to 1st param if input file is available
+    Op::new_jmp("FCHK", FCHK_ADDR, FCHK_AREG),
+    //PSTR addr_reg|addr
+    //Print ACC chars from 1st param in memory
+    Op::new_mem("PSTR", PSTR_ADDR, PSTR_AREG),
+    //RSTR addr_reg|addr
+    //Read up to chars keyboard (until return is pressed or 255 entered) starting at 1st param in memory
+    Op::new_mem("RSTR", RSTR_ADDR, RSTR_AREG),
+    //RCHR reg
+    //Read one char from keyboard into 1st param
+    Op::new_single_reg("RCHR", RCHR_REG),
 ];

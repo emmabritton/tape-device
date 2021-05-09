@@ -1,6 +1,6 @@
 # Tape Device
 
-Language for fictional computer with no screen or input devices that executes programs optionally with input data.
+Language (vm, compiler, decompiler) for fictional computer that executes programs optionally with input data.
 
 ### Device
 

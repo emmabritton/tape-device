@@ -101,6 +101,10 @@ Print string from tape data
 
 Go to new line
 
+`PSTR addr|addr_reg`
+
+Print `ACC` characters from addr in memory
+
 ### Comparison
 
 `CMP data_reg data_reg|num`
@@ -186,6 +190,10 @@ Skip up to `reg` bytes in file, populates `ACC` with number of bytes actually sk
 
 Move file cursor to `[D3][D2][D1][D0]` (0..4294967295)
 
+`FCHK addr|addr_reg`
+
+Jump to addr if a input file is available 
+
 ### Stack
 
 `CALL addr_reg|label|addr`
@@ -213,6 +221,21 @@ To get first call `ARG <reg> 1`, if the first param 1 byte then the second param
 This instruction does not alter data on the stack or move the SP or FP.
 
 *See stack example for more info*
+
+### Input
+
+`IPOLL addr|addr_reg`
+
+Jump to addr if at least one character is available to be read from keyboard
+
+`RCHR reg`
+
+Read one character from keyboard and set in reg, blocking
+
+`RSTR addr|addr_reg`
+
+Read characters from keyboard and store starting at addr in memory, reads until return is pressed or 255 characters are entered.
+Stores length of string in `ACC` 
 
 ### Misc
 

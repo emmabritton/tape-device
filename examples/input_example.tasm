@@ -1,0 +1,20 @@
+Input Example
+1
+.strings
+greeting=Enter your name and press return
+hello=Hello,
+.ops
+const space 32  #ASCII code for ' ' is 32
+prtd greeting   #print string named greeting
+prtln           #print newline
+rstr @0         #read string from keyboard and save to memory at addr 0
+                  #this reads up to 255 chars or until return is pressed
+                  #and saves the read count to ACC
+prtln           #print newline
+prtd hello      #print string named hello
+prtc space      #print character space
+pstr @0         #print string from memory starting at addr 0
+                  #note this reads from addr to addr+acc
+                  #in this case, acc is still populated with the length from rstr above
+prtln           #print new line
+halt            #stop program (as it's the last line this is optional)

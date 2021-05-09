@@ -2,8 +2,8 @@ use crate::constants::code::*;
 
 pub mod hardware {
     pub const RAM_SIZE: usize = 0xFFFF;
-    pub const DATA_REG_SIZE: usize = 4;
-    pub const ADDR_REG_SIZE: usize = 2;
+    pub const DATA_REG_COUNT: usize = 4;
+    pub const ADDR_REG_COUNT: usize = 2;
 
     pub const REG_ACC: u8 = 0x01;
 
@@ -26,7 +26,7 @@ pub mod system {
     pub const TAPE_HEADER_1: u8 = 0xFD;
     pub const TAPE_HEADER_2: u8 = 0xA0;
 
-    pub const PRG_VERSION: u8 = 10;
+    pub const PRG_VERSION: u8 = 11;
 }
 
 pub mod code {
@@ -86,6 +86,8 @@ pub mod code {
     pub const PRTD_STR: u8 = 0x93;
     pub const PRTC_REG: u8 = 0x94;
     pub const PRTC_VAL: u8 = 0x95;
+    pub const PSTR_ADDR: u8 = 0x96;
+    pub const PSTR_AREG: u8 = 0x97;
 
     pub const FOPEN: u8 = 0xC0;
     pub const FILER_ADDR: u8 = 0xC1;
@@ -95,6 +97,14 @@ pub mod code {
     pub const FSEEK: u8 = 0xC5;
     pub const FSKIP_REG: u8 = 0xC6;
     pub const FSKIP_VAL: u8 = 0xC7;
+    pub const FCHK_ADDR: u8 = 0xC8;
+    pub const FCHK_AREG: u8 = 0xC9;
+
+    pub const IPOLL_ADDR: u8 = 0xD0;
+    pub const IPOLL_AREG: u8 = 0xD1;
+    pub const RCHR_REG: u8 = 0xD2;
+    pub const RSTR_ADDR: u8 = 0xD3;
+    pub const RSTR_AREG: u8 = 0xD4;
 
     pub const NOP: u8 = 0xFE;
     pub const HALT: u8 = 0xFF;
@@ -105,12 +115,13 @@ pub fn get_byte_count(opcode: u8) -> usize {
         FSEEK | PRTLN | FOPEN | SWPAR | CMPAR | RET | NOP | HALT => 1,
         INC_REG | DEC_REG | JMP_AREG | JE_AREG | JNE_AREG | JL_AREG | JG_AREG | OVER_AREG
         | NOVER_AREG | MEMR_AREG | MEMW_AREG | CALL_AREG | PUSH_REG | PUSH_VAL | POP_REG
-        | PRT_REG | PRT_VAL | PRTC_REG | PRTC_VAL | FILER_AREG | FILEW_AREG => 2,
+        | PRT_REG | PRT_VAL | PRTC_REG | PRTC_VAL | FILER_AREG | FILEW_AREG | RCHR_REG => 2,
         ADD_REG_REG | ADD_REG_VAL | SUB_REG_REG | SUB_REG_VAL | CPY_REG_REG | CPY_REG_VAL
         | CPY_A0_REG_REG | CPY_A0_ADDR | CPY_A1_REG_REG | CPY_A1_ADDR | LDA0_REG_REG
         | LDA1_REG_REG | JMP_ADDR | JE_ADDR | JNE_ADDR | JL_ADDR | JG_ADDR | OVER_ADDR
         | NOVER_ADDR | CMP_REG_REG | CMP_REG_VAL | MEMR_ADDR | MEMW_ADDR | CALL_ADDR | PRTD_STR
-        | FILER_ADDR | FILEW_ADDR | FSKIP_REG | ARG_REG_VAL | ARG_REG_REG => 3,
+        | FILER_ADDR | FILEW_ADDR | FSKIP_REG | ARG_REG_VAL | ARG_REG_REG | PSTR_ADDR
+        | PSTR_AREG | FCHK_ADDR | FCHK_AREG | IPOLL_ADDR | IPOLL_AREG | RSTR_ADDR | RSTR_AREG => 3,
         _ => panic!("Unknown opcode: {}", opcode),
     }
 }
@@ -135,6 +146,10 @@ pub fn is_jump_op(opcode: u8) -> bool {
             | CALL_ADDR
             | CALL_AREG
             | RET
+            | FCHK_AREG
+            | FCHK_ADDR
+            | IPOLL_AREG
+            | IPOLL_ADDR
     )
 }
 
@@ -144,7 +159,7 @@ mod tests {
     use crate::constants::get_byte_count;
     use std::collections::HashSet;
 
-    const ALL_OPS: [u8; 59] = [
+    const ALL_OPS: [u8; 66] = [
         ADD_REG_REG,
         ADD_REG_VAL,
         SUB_REG_REG,
@@ -204,6 +219,13 @@ mod tests {
         HALT,
         ARG_REG_VAL,
         ARG_REG_REG,
+        FCHK_ADDR,
+        FCHK_AREG,
+        IPOLL_ADDR,
+        IPOLL_AREG,
+        RCHR_REG,
+        RSTR_AREG,
+        RSTR_ADDR,
     ];
 
     #[test]

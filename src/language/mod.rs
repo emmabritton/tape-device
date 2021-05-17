@@ -68,8 +68,6 @@ mod tests {
         test_no_param("FOPEN", FOPEN);
         test_no_param("FSEEK", FSEEK);
         test_no_param("RET", RET);
-        test_no_param("SWPAR", SWPAR);
-        test_no_param("CMPAR", CMPAR);
         test_no_param("PRTLN", PRTLN);
     }
 
@@ -91,18 +89,6 @@ mod tests {
         test_mem("MEMW", MEMW_ADDR, MEMW_AREG);
         test_mem("FILER", FILER_ADDR, FILER_AREG);
         test_mem("FILEW", FILEW_ADDR, FILEW_AREG);
-    }
-
-    #[test]
-    fn test_reg_reg_addrs() {
-        test_reg_reg_addr("CPYA0", CPY_A0_ADDR, CPY_A0_REG_REG);
-        test_reg_reg_addr("CPYA1", CPY_A1_ADDR, CPY_A1_REG_REG);
-    }
-
-    #[test]
-    fn test_reg_regs() {
-        test_reg_reg("LDA0", LDA0_REG_REG);
-        test_reg_reg("LDA1", LDA1_REG_REG);
     }
 
     #[test]

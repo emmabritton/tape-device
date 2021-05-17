@@ -57,7 +57,7 @@ In the ops section constants can be defined like this
 
 The name can not be the same as any label, mnemonic or register.
 
-The value must be a valid parameter
+The value must be a valid parameter and the definition must come before any use.
 
 ### Math
 
@@ -71,9 +71,17 @@ Sets `ACC` = param1 - param2
 
 ### Data
 
-`CPY data_reg data_reg|num`
+```
+CPY
+data_reg data_reg
+addr_reg addr_reg
+data_reg data_reg addr_reg
+addr_reg data_reg data_reg
+addr_reg addr|label
+data_reg num
+```
 
-Sets param1 = param2
+Copies values from right to left, in most cases from 2nd param to 1st param. Except with `addr_reg` where it's to/from `addr_reg` and both `data_reg`. 
 
 `MEMR addr|addr_reg`
 
@@ -82,6 +90,10 @@ Read byte from `addr` in memory and set in `ACC`
 `MEMW addr|addr_reg`
 
 Read from `ACC` and set byte `addr` in memory
+
+`SWP data_reg|addr_reg data_reg|addr_reg`
+
+Swap values in both registers, data can only be used with data and addr with addr.
 
 ### Printing
 
@@ -107,7 +119,7 @@ Print `ACC` characters from addr in memory
 
 ### Comparison
 
-`CMP data_reg data_reg|num`
+`CMP data_reg|addr_reg addr_reg|data_reg|num`
 
 Compare param1 and param2 and set result in `ACC`
 
@@ -140,33 +152,6 @@ Jump to label if overflow flag set
 `NOVER lbl|addr_reg`
 
 Jump to label if overflow flag not set
-
-### Addresses
-
-`SWPAR`
-
-Swap contents of `A0` and `A1`
-
-`CMPAR`
-
-Compares contents of `A0` and `A1` and stores result in `ACC`
-Values are relative to `A0`, so if `A0` > `A1` then `ACC` will contain `GREATER`
-
-`CPYA0 addr|lbl or reg reg`
-
-Copy from parameters (address, or two data registers) into `A0`
-
-`CPYA1 addr|lbl or reg reg`
-
-Copy from parameters (address, or two data registers) into `A1`
-
-`LDA0 reg reg`
-
-Copy value from `A0` into registers
-
-`LDA1 reg reg`
-
-Copy value from `A1` into registers
 
 ### File
 

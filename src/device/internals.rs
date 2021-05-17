@@ -211,7 +211,6 @@ impl Device {
                 self.get_reg(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
-            CPY_REG_VAL => self.load(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
             MEMR_ADDR => self.load(
                 REG_ACC,
                 self.get_mem(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
@@ -220,9 +219,24 @@ impl Device {
                 REG_ACC,
                 self.get_mem(self.get_addr_reg(self.tape_ops[idx + 1])?),
             )?,
+            CPY_REG_VAL => self.load(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
             CPY_REG_REG => self.load(
                 self.tape_ops[idx + 1],
                 self.get_reg(self.tape_ops[idx + 2])?,
+            )?,
+            CPY_AREG_REG_REG => self.copy_addr_reg(
+                self.tape_ops[idx + 1],
+                self.tape_ops[idx + 2],
+                self.tape_ops[idx + 3],
+            )?,
+            CPY_REG_REG_AREG => self.load_addr_reg(
+                self.tape_ops[idx + 3],
+                self.tape_ops[idx + 1],
+                self.tape_ops[idx + 2],
+            )?,
+            CPY_AREG_ADDR => self.copy_addr_reg_val(
+                self.tape_ops[idx + 1],
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
             )?,
             MEMW_ADDR => self.store(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
             MEMW_AREG => self.store(self.get_addr_reg(self.tape_ops[idx + 1])?),
@@ -298,6 +312,28 @@ impl Device {
                 self.get_reg(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
+            CMP_AREG_ADDR => self.compare_16(
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+            ),
+            CMP_AREG_AREG => self.compare_16(
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                self.get_addr_reg(self.tape_ops[idx + 2])?,
+            ),
+            CMP_AREG_REG_REG => self.compare_16(
+                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                addr(
+                    self.get_reg(self.tape_ops[idx + 2])?,
+                    self.get_reg(self.tape_ops[idx + 3])?,
+                ),
+            ),
+            CMP_REG_REG_AREG => self.compare_16(
+                addr(
+                    self.get_reg(self.tape_ops[idx + 1])?,
+                    self.get_reg(self.tape_ops[idx + 2])?,
+                ),
+                self.get_addr_reg(self.tape_ops[idx + 3])?,
+            ),
             PRT_REG => self.print(self.get_reg(self.tape_ops[idx + 1])?),
             PRT_VAL => self.print(self.tape_ops[idx + 1]),
             PRTC_REG => self.printc(self.get_reg(self.tape_ops[idx + 1])?),
@@ -328,32 +364,9 @@ impl Device {
                 self.stack_call(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]), false)
             }
             CALL_AREG => self.stack_call(self.get_addr_reg(self.tape_ops[idx + 1])?, true),
-            SWPAR => self.swap_addr_reg(),
-            CMPAR => self.cmp_addr_reg(),
-            LDA0_REG_REG => self.load_addr_reg(
-                REG_A0,
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
-            )?,
-            LDA1_REG_REG => self.load_addr_reg(
-                REG_A1,
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
-            )?,
-            CPY_A0_REG_REG => self.copy_addr_reg(
-                REG_A0,
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
-            )?,
-            CPY_A1_REG_REG => self.copy_addr_reg(
-                REG_A1,
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
-            )?,
-            CPY_A0_ADDR => self
-                .copy_addr_reg_val(REG_A0, addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
-            CPY_A1_ADDR => self
-                .copy_addr_reg_val(REG_A1, addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
+            SWP_REG_REG | SWP_AREG_AREG => {
+                self.swap(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?
+            }
             IPOLL_ADDR => {
                 self.poll_input(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]), false)?
             }
@@ -710,8 +723,37 @@ impl Device {
         self.log(&format!("{}", val as char));
     }
 
-    fn swap_addr_reg(&mut self) {
-        self.addr_reg.swap(0, 1);
+    fn swap(&mut self, reg1: u8, reg2: u8) -> Result<()> {
+        let is_addr_reg = |reg: u8| reg == REG_A0 || reg == REG_A1;
+        let data_reg_idx = |reg: u8| match reg {
+            REG_D0 => 0,
+            REG_D1 => 1,
+            REG_D2 => 2,
+            REG_D3 => 3,
+            _ => panic!("Impossible state, {}", reg),
+        };
+
+        if is_addr_reg(reg1) && is_addr_reg(reg2) {
+            self.addr_reg.swap(0, 1);
+        } else if !is_addr_reg(reg1) && !is_addr_reg(reg2) {
+            if reg1 != REG_ACC && reg2 != REG_ACC {
+                self.data_reg.swap(data_reg_idx(reg1), data_reg_idx(reg2))
+            } else if reg1 == REG_ACC && reg2 == REG_ACC {
+                //do nothing
+            } else if reg1 == REG_ACC {
+                let tmp = self.acc;
+                self.acc = self.data_reg[data_reg_idx(reg2)];
+                self.data_reg[data_reg_idx(reg2)] = tmp;
+            } else if reg2 == REG_ACC {
+                let tmp = self.acc;
+                self.acc = self.data_reg[data_reg_idx(reg1)];
+                self.data_reg[data_reg_idx(reg1)] = tmp;
+            }
+        } else {
+            return Err(Error::msg("Invalid registers, mix of data and address"));
+        }
+
+        Ok(())
     }
 
     fn change(&mut self, id: u8, diff: isize) -> Result<()> {
@@ -743,15 +785,15 @@ impl Device {
         Ok(())
     }
 
-    fn cmp_addr_reg(&mut self) {
-        match self.addr_reg[0].cmp(&self.addr_reg[1]) {
+    fn compare(&mut self, lhs: u8, rhs: u8) {
+        match lhs.cmp(&rhs) {
             Ordering::Less => self.acc = compare::LESSER,
             Ordering::Equal => self.acc = compare::EQUAL,
             Ordering::Greater => self.acc = compare::GREATER,
         }
     }
 
-    fn compare(&mut self, lhs: u8, rhs: u8) {
+    fn compare_16(&mut self, lhs: u16, rhs: u16) {
         match lhs.cmp(&rhs) {
             Ordering::Less => self.acc = compare::LESSER,
             Ordering::Equal => self.acc = compare::EQUAL,
@@ -1050,6 +1092,32 @@ mod test {
 
         assert_eq!(printer.borrow().output(), String::new());
         assert_eq!(printer.borrow().error_output(), String::new());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_swapping() {
+        let ops = vec![
+            CPY_REG_VAL, REG_D0, 10,
+            SWP_REG_REG, REG_D0, REG_D1,
+            SWP_REG_REG, REG_D1, REG_D2,
+            SWP_REG_REG, REG_D2, REG_D3,
+            SWP_REG_REG, REG_D3, REG_ACC,
+            CPY_AREG_ADDR, REG_A0, 0xF, 0xFF,
+            SWP_AREG_AREG, REG_A0, REG_A1
+        ];
+
+        let printer = DebugPrinter::new();
+        let mut device = Device::new(ops, vec![], None, printer.clone());
+
+        assert_eq!(device.dump(), Dump::default());
+        assert_step_device("PUSH D0 10", &mut device, Dump {pc: 3,data_reg:[10,0,0,0],..Dump::default()});
+        assert_step_device("SWP D0 D1", &mut device, Dump {pc: 6,data_reg:[0,10,0,0],..Dump::default()});
+        assert_step_device("SWP D1 D2", &mut device, Dump {pc: 9,data_reg:[0,0,10,0],..Dump::default()});
+        assert_step_device("SWP D2 D3", &mut device, Dump {pc: 12,data_reg:[0,0,0,10],..Dump::default()});
+        assert_step_device("SWP D3 ACC", &mut device, Dump {pc: 15,acc:10,..Dump::default()});
+        assert_step_device("CPY A0 @0xFFF", &mut device, Dump {pc: 19,acc:10,addr_reg:[4095, 0],..Dump::default()});
+        assert_step_device("SWP A0 A1", &mut device, Dump {pc: 22,acc:10,addr_reg:[0, 4095],..Dump::default()});
     }
 
     #[test]

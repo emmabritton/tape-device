@@ -39,13 +39,12 @@ pub mod code {
 
     pub const CPY_REG_REG: u8 = 0x10;
     pub const CPY_REG_VAL: u8 = 0x11;
-    pub const CPY_A0_REG_REG: u8 = 0x12;
-    pub const CPY_A0_ADDR: u8 = 0x13;
-    pub const CPY_A1_REG_REG: u8 = 0x14;
-    pub const CPY_A1_ADDR: u8 = 0x15;
-    pub const LDA0_REG_REG: u8 = 0x16;
-    pub const LDA1_REG_REG: u8 = 0x17;
-    pub const SWPAR: u8 = 0x18;
+    pub const CPY_AREG_REG_REG: u8 = 0x12;
+    pub const CPY_AREG_ADDR: u8 = 0x13;
+    pub const CPY_REG_REG_AREG: u8 = 0x14;
+    pub const CPY_AREG_AREG: u8 = 0x15;
+    pub const SWP_REG_REG: u8 = 0x16;
+    pub const SWP_AREG_AREG: u8 = 0x17;
 
     pub const JMP_ADDR: u8 = 0x20;
     pub const JMP_AREG: u8 = 0x21;
@@ -64,7 +63,10 @@ pub mod code {
 
     pub const CMP_REG_REG: u8 = 0x30;
     pub const CMP_REG_VAL: u8 = 0x31;
-    pub const CMPAR: u8 = 0x32;
+    pub const CMP_AREG_AREG: u8 = 0x32;
+    pub const CMP_AREG_ADDR: u8 = 0x33;
+    pub const CMP_REG_REG_AREG: u8 = 0x34;
+    pub const CMP_AREG_REG_REG: u8 = 0x35;
 
     pub const MEMR_ADDR: u8 = 0x40;
     pub const MEMR_AREG: u8 = 0x41;
@@ -112,16 +114,18 @@ pub mod code {
 
 pub fn get_byte_count(opcode: u8) -> usize {
     match opcode {
-        FSEEK | PRTLN | FOPEN | SWPAR | CMPAR | RET | NOP | HALT => 1,
+        FSEEK | PRTLN | FOPEN | RET | NOP | HALT => 1,
         INC_REG | DEC_REG | JMP_AREG | JE_AREG | JNE_AREG | JL_AREG | JG_AREG | OVER_AREG
         | NOVER_AREG | MEMR_AREG | MEMW_AREG | CALL_AREG | PUSH_REG | PUSH_VAL | POP_REG
         | PRT_REG | PRT_VAL | PRTC_REG | PRTC_VAL | FILER_AREG | FILEW_AREG | RCHR_REG => 2,
         ADD_REG_REG | ADD_REG_VAL | SUB_REG_REG | SUB_REG_VAL | CPY_REG_REG | CPY_REG_VAL
-        | CPY_A0_REG_REG | CPY_A0_ADDR | CPY_A1_REG_REG | CPY_A1_ADDR | LDA0_REG_REG
-        | LDA1_REG_REG | JMP_ADDR | JE_ADDR | JNE_ADDR | JL_ADDR | JG_ADDR | OVER_ADDR
-        | NOVER_ADDR | CMP_REG_REG | CMP_REG_VAL | MEMR_ADDR | MEMW_ADDR | CALL_ADDR | PRTD_STR
-        | FILER_ADDR | FILEW_ADDR | FSKIP_REG | ARG_REG_VAL | ARG_REG_REG | PSTR_ADDR
-        | PSTR_AREG | FCHK_ADDR | FCHK_AREG | IPOLL_ADDR | IPOLL_AREG | RSTR_ADDR | RSTR_AREG => 3,
+        | SWP_AREG_AREG | SWP_REG_REG | JMP_ADDR | JE_ADDR | JNE_ADDR | JL_ADDR | JG_ADDR
+        | OVER_ADDR | CMP_AREG_AREG | CPY_AREG_AREG | NOVER_ADDR | CMP_REG_REG | CMP_REG_VAL
+        | MEMR_ADDR | MEMW_ADDR | CALL_ADDR | PRTD_STR | FILER_ADDR | FILEW_ADDR | FSKIP_REG
+        | ARG_REG_VAL | ARG_REG_REG | PSTR_ADDR | PSTR_AREG | FCHK_ADDR | FCHK_AREG
+        | IPOLL_ADDR | IPOLL_AREG | RSTR_ADDR | RSTR_AREG => 3,
+        CMP_AREG_ADDR | CPY_AREG_ADDR | CMP_AREG_REG_REG | CMP_REG_REG_AREG | CPY_REG_REG_AREG
+        | CPY_AREG_REG_REG => 4,
         _ => panic!("Unknown opcode: {}", opcode),
     }
 }
@@ -159,7 +163,7 @@ mod tests {
     use crate::constants::get_byte_count;
     use std::collections::HashSet;
 
-    const ALL_OPS: [u8; 66] = [
+    const ALL_OPS: [u8; 68] = [
         ADD_REG_REG,
         ADD_REG_VAL,
         SUB_REG_REG,
@@ -168,13 +172,16 @@ mod tests {
         DEC_REG,
         CPY_REG_REG,
         CPY_REG_VAL,
-        CPY_A0_REG_REG,
-        CPY_A0_ADDR,
-        CPY_A1_REG_REG,
-        CPY_A1_ADDR,
-        LDA0_REG_REG,
-        LDA1_REG_REG,
-        SWPAR,
+        CPY_AREG_AREG,
+        CPY_AREG_ADDR,
+        CPY_AREG_REG_REG,
+        CPY_REG_REG_AREG,
+        CMP_AREG_AREG,
+        CMP_AREG_ADDR,
+        CMP_REG_REG_AREG,
+        CMP_REG_REG,
+        CMP_AREG_REG_REG,
+        CMP_REG_VAL,
         JMP_ADDR,
         JMP_AREG,
         JE_ADDR,
@@ -189,9 +196,6 @@ mod tests {
         OVER_AREG,
         NOVER_ADDR,
         NOVER_AREG,
-        CMP_REG_REG,
-        CMP_REG_VAL,
-        CMPAR,
         MEMR_ADDR,
         MEMR_AREG,
         MEMW_ADDR,
@@ -226,6 +230,8 @@ mod tests {
         RCHR_REG,
         RSTR_AREG,
         RSTR_ADDR,
+        SWP_REG_REG,
+        SWP_AREG_AREG,
     ];
 
     #[test]

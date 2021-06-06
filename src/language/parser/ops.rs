@@ -1,5 +1,5 @@
 use crate::language::parser::params::{Param, Parameters};
-use anyhow::Result;
+use anyhow::{Error, Result};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -35,10 +35,7 @@ impl Op {
     pub fn new_none(mnemonic: &'static str, opcode: u8) -> Self {
         Op {
             mnemonic,
-            variants: vec![OpVariant::new(
-                opcode,
-                vec![Parameters::NONE, Parameters::NONE],
-            )],
+            variants: vec![OpVariant::new(opcode, vec![])],
         }
     }
 
@@ -46,6 +43,29 @@ impl Op {
         Op {
             mnemonic,
             variants: vec![OpVariant::new(opcode, vec![Parameters::STRING_KEY])],
+        }
+    }
+
+    pub fn new_areg(mnemonic: &'static str, opcode: u8) -> Self {
+        Op {
+            mnemonic,
+            variants: vec![OpVariant::new(opcode, vec![Parameters::ADDR_REG])],
+        }
+    }
+
+    pub fn new_regvaldata(
+        mnemonic: &'static str,
+        opcode_reg: u8,
+        opcode_val: u8,
+        opcode_areg: u8,
+    ) -> Self {
+        Op {
+            mnemonic,
+            variants: vec![
+                OpVariant::new(opcode_reg, vec![Parameters::DATA_REG]),
+                OpVariant::new(opcode_val, vec![Parameters::NUMBER]),
+                OpVariant::new(opcode_areg, vec![Parameters::ADDR_REG]),
+            ],
         }
     }
 
@@ -96,6 +116,45 @@ impl Op {
         }
     }
 
+    pub fn new_file_mem(
+        mnemonic: &'static str,
+        opcode_reg_addr: u8,
+        opcode_reg_addr_reg: u8,
+        opcode_val_addr: u8,
+        opcode_val_addr_reg: u8,
+    ) -> Self {
+        Op {
+            mnemonic,
+            variants: vec![
+                OpVariant::new(
+                    opcode_reg_addr,
+                    vec![Parameters::DATA_REG, Parameters::ADDRESS],
+                ),
+                OpVariant::new(
+                    opcode_reg_addr_reg,
+                    vec![Parameters::DATA_REG, Parameters::ADDR_REG],
+                ),
+                OpVariant::new(
+                    opcode_val_addr,
+                    vec![Parameters::NUMBER, Parameters::ADDRESS],
+                ),
+                OpVariant::new(
+                    opcode_val_addr_reg,
+                    vec![Parameters::NUMBER, Parameters::ADDR_REG],
+                ),
+            ],
+        }
+    }
+    pub fn new_areg_areg(mnemonic: &'static str, opcode_addr_reg_addr_reg: u8) -> Self {
+        Op {
+            mnemonic,
+            variants: vec![OpVariant::new(
+                opcode_addr_reg_addr_reg,
+                vec![Parameters::ADDR_REG, Parameters::ADDR_REG],
+            )],
+        }
+    }
+
     pub fn new_mem(mnemonic: &'static str, opcode_addr: u8, opcode_addr_reg: u8) -> Self {
         Op {
             mnemonic,
@@ -106,7 +165,13 @@ impl Op {
         }
     }
 
-    pub fn new_reg_val(mnemonic: &'static str, opcode_reg_reg: u8, opcode_reg_val: u8) -> Self {
+    pub fn new_regval_regval(
+        mnemonic: &'static str,
+        opcode_reg_reg: u8,
+        opcode_reg_val: u8,
+        opcode_val_reg: u8,
+        opcode_val_val: u8,
+    ) -> Self {
         Op {
             mnemonic,
             variants: vec![
@@ -118,62 +183,39 @@ impl Op {
                     opcode_reg_val,
                     vec![Parameters::DATA_REG, Parameters::NUMBER],
                 ),
+                OpVariant::new(
+                    opcode_val_reg,
+                    vec![Parameters::NUMBER, Parameters::DATA_REG],
+                ),
+                OpVariant::new(opcode_val_val, vec![Parameters::NUMBER, Parameters::NUMBER]),
             ],
         }
     }
 
-    // pub fn new_either_reg_val(
-    //     mnemonic: &'static str,
-    //     opcode_reg_reg: u8,
-    //     opcode_reg_val: u8,
-    //     opcode_areg_areg: u8,
-    //     opcode_areg_addr: u8,
-    // ) -> Self {
-    //     Op {
-    //         mnemonic,
-    //         variants: vec![
-    //             OpVariant::new(
-    //                 opcode_reg_reg,
-    //                 vec![Parameters::DATA_REG, Parameters::DATA_REG],
-    //             ),
-    //             OpVariant::new(
-    //                 opcode_reg_val,
-    //                 vec![Parameters::DATA_REG, Parameters::NUMBER],
-    //             ),
-    //             OpVariant::new(
-    //                 opcode_areg_areg,
-    //                 vec![Parameters::ADDR_REG, Parameters::ADDR_REG],
-    //             ),
-    //             OpVariant::new(
-    //                 opcode_areg_addr,
-    //                 vec![Parameters::ADDR_REG, Parameters::ADDRESSES],
-    //             ),
-    //         ],
-    //     }
-    // }
-
-    // pub fn new_reg_reg_addr(mnemonic: &'static str, opcode_reg_reg: u8, opcode_addr: u8) -> Self {
-    //     Op {
-    //         mnemonic,
-    //         variants: vec![
-    //             OpVariant::new(
-    //                 opcode_reg_reg,
-    //                 vec![Parameters::DATA_REG, Parameters::DATA_REG],
-    //             ),
-    //             OpVariant::new(opcode_addr, vec![Parameters::ADDRESSES]),
-    //         ],
-    //     }
-    // }
-
-    // pub fn new_reg_reg(mnemonic: &'static str, opcode_reg_reg: u8) -> Self {
-    //     Op {
-    //         mnemonic,
-    //         variants: vec![OpVariant::new(
-    //             opcode_reg_reg,
-    //             vec![Parameters::DATA_REG, Parameters::DATA_REG],
-    //         )],
-    //     }
-    // }
+    pub fn new_reg_val(
+        mnemonic: &'static str,
+        opcode_reg_reg: u8,
+        opcode_reg_val: u8,
+        opcode_reg_areg: u8,
+    ) -> Self {
+        Op {
+            mnemonic,
+            variants: vec![
+                OpVariant::new(
+                    opcode_reg_reg,
+                    vec![Parameters::DATA_REG, Parameters::DATA_REG],
+                ),
+                OpVariant::new(
+                    opcode_reg_val,
+                    vec![Parameters::DATA_REG, Parameters::NUMBER],
+                ),
+                OpVariant::new(
+                    opcode_reg_areg,
+                    vec![Parameters::DATA_REG, Parameters::ADDR_REG],
+                ),
+            ],
+        }
+    }
 
     pub fn new_either_reg_reg(
         mnemonic: &'static str,
@@ -243,12 +285,112 @@ impl Op {
         }
     }
 
+    pub fn new_data_regval(
+        mnemonic: &'static str,
+        opcode_data_reg: u8,
+        opcode_data_val: u8,
+    ) -> Self {
+        Op {
+            mnemonic,
+            variants: vec![
+                OpVariant::new(
+                    opcode_data_reg,
+                    vec![Parameters::DATA_KEY, Parameters::DATA_REG],
+                ),
+                OpVariant::new(
+                    opcode_data_val,
+                    vec![Parameters::DATA_KEY, Parameters::NUMBER],
+                ),
+            ],
+        }
+    }
+
+    pub fn new_data(
+        mnemonic: &'static str,
+        opcode_areg_data_reg_reg: u8,
+        opcode_areg_data_reg_val: u8,
+        opcode_areg_data_val_reg: u8,
+        opcode_areg_data_val_val: u8,
+    ) -> Self {
+        Op {
+            mnemonic,
+            variants: vec![
+                OpVariant::new(
+                    opcode_areg_data_reg_reg,
+                    vec![
+                        Parameters::ADDR_REG,
+                        Parameters::DATA_KEY,
+                        Parameters::DATA_REG,
+                        Parameters::DATA_REG,
+                    ],
+                ),
+                OpVariant::new(
+                    opcode_areg_data_reg_val,
+                    vec![
+                        Parameters::ADDR_REG,
+                        Parameters::DATA_KEY,
+                        Parameters::DATA_REG,
+                        Parameters::NUMBER,
+                    ],
+                ),
+                OpVariant::new(
+                    opcode_areg_data_val_reg,
+                    vec![
+                        Parameters::ADDR_REG,
+                        Parameters::DATA_KEY,
+                        Parameters::NUMBER,
+                        Parameters::DATA_REG,
+                    ],
+                ),
+                OpVariant::new(
+                    opcode_areg_data_val_val,
+                    vec![
+                        Parameters::ADDR_REG,
+                        Parameters::DATA_KEY,
+                        Parameters::NUMBER,
+                        Parameters::NUMBER,
+                    ],
+                ),
+            ],
+        }
+    }
+
     pub fn new_jmp(mnemonic: &'static str, opcode_addr: u8, opcode_addr_reg: u8) -> Self {
         Op {
             mnemonic,
             variants: vec![
                 OpVariant::new(opcode_addr_reg, vec![Parameters::ADDR_REG]),
                 OpVariant::new(opcode_addr, vec![Parameters::ADDRESSES]),
+            ],
+        }
+    }
+
+    pub fn new_regval_jmp(
+        mnemonic: &'static str,
+        opcode_reg_addr: u8,
+        opcode_reg_addr_reg: u8,
+        opcode_val_addr: u8,
+        opcode_val_addr_reg: u8,
+    ) -> Self {
+        Op {
+            mnemonic,
+            variants: vec![
+                OpVariant::new(
+                    opcode_reg_addr_reg,
+                    vec![Parameters::DATA_REG, Parameters::ADDR_REG],
+                ),
+                OpVariant::new(
+                    opcode_reg_addr,
+                    vec![Parameters::DATA_REG, Parameters::ADDRESSES],
+                ),
+                OpVariant::new(
+                    opcode_val_addr_reg,
+                    vec![Parameters::NUMBER, Parameters::ADDR_REG],
+                ),
+                OpVariant::new(
+                    opcode_val_addr,
+                    vec![Parameters::NUMBER, Parameters::ADDRESSES],
+                ),
             ],
         }
     }
@@ -263,11 +405,15 @@ impl OpVariant {
     #[allow(clippy::len_zero)]
     fn parse(&self, input: &[&str]) -> Result<Vec<Param>> {
         let mut output = vec![];
-        if input.len() > 0 {
-            output.push(self.params[0].parse(input[0])?);
+        if input.len() > self.params.len() {
+            return Err(Error::msg("Too many operands"));
         }
-        if input.len() > 1 {
-            output.push(self.params[1].parse(input[1])?);
+        for (idx, param) in self.params.iter().enumerate() {
+            if input.len() > idx {
+                output.push(param.parse(input[idx])?);
+            } else {
+                return Err(Error::msg("Missing operands"));
+            }
         }
         Ok(output)
     }
@@ -281,6 +427,14 @@ impl OpVariant {
 
 impl Display for OpVariant {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.params[0], self.params[1])
+        write!(
+            f,
+            "{}",
+            self.params
+                .iter()
+                .map(|param| param.to_string())
+                .collect::<Vec<String>>()
+                .join(" ")
+        )
     }
 }

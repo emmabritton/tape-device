@@ -9,7 +9,7 @@ pub(super) fn compile_strings(
     let mut mapping = HashMap::with_capacity(lines.len());
     let mut output = Vec::with_capacity(lines.len() * 10);
     let mut line = lines.remove(0);
-    while line != ".ops" {
+    while line != ".ops" && line != ".data" {
         if let Some(idx) = line.find('=') {
             let (key, content) = line.split_at(idx);
             let mut content: String = content.chars().skip(1).collect();
@@ -49,6 +49,13 @@ pub(super) fn compile_strings(
             )));
         }
         line = lines.remove(0);
+    }
+
+    if line == ".data" {
+        //This is a horrible hack but without the code would have to be significantly changed
+        //This line '.data' is needed by code outside this file so it must reinserted if it was
+        //found and removed above
+        lines.insert(0, String::from(".data"));
     }
 
     output.shrink_to_fit();
@@ -169,6 +176,27 @@ mod tests {
         let result = compile_strings(&mut input, false);
         assert_eq!(input.len(), 1);
         assert_eq!(input[0], String::from("INC D0"));
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(
+            result.0.keys().collect::<Vec<&String>>(),
+            vec![&String::from("a")]
+        );
+        assert_eq!(result.0.values().collect::<Vec<&u16>>(), vec![&0]);
+        assert_eq!(result.1, [6, 115, 116, 114, 105, 110, 103]);
+    }
+
+    #[test]
+    fn test_data_not_consumed() {
+        let mut input = vec![
+            String::from("a=string"),
+            String::from(".data"),
+            String::from("key=[[0]]"),
+        ];
+        let result = compile_strings(&mut input, false);
+        assert_eq!(input.len(), 2);
+        assert_eq!(input[0], String::from(".data"));
+        assert_eq!(input[1], String::from("key=[[0]]"));
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(

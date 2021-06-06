@@ -1,3 +1,4 @@
+use crate::constants::get_addr_byte_offset;
 use crate::constants::hardware::*;
 use crate::language::parse_line;
 use crate::language::parser::params::Param;
@@ -69,9 +70,14 @@ fn process_constants(lines: Vec<String>) -> Result<(Vec<String>, Vec<String>)> {
     Ok((constant_names, processed_ops))
 }
 
-pub(super) fn assemble(lines: Vec<String>, strings_data: HashMap<String, u16>) -> Result<Vec<u8>> {
+pub(super) fn assemble(
+    lines: Vec<String>,
+    strings_data: HashMap<String, u16>,
+    datas: HashMap<String, u16>,
+) -> Result<Vec<u8>> {
     let mut program = Vec::with_capacity(lines.len() * 2);
     let mut used_string_keys = HashSet::with_capacity(strings_data.len());
+    let mut used_data_keys = HashSet::with_capacity(datas.len());
     let mut labels: LabelTable = HashMap::new();
 
     let (constants, lines) = process_constants(lines)?;
@@ -81,12 +87,6 @@ pub(super) fn assemble(lines: Vec<String>, strings_data: HashMap<String, u16>) -
         if !line.is_empty() && !line.starts_with('#') {
             let op = if line.contains(':') {
                 let parts: Vec<&str> = line.split(':').collect();
-                if parts.len() != 2 {
-                    return Err(Error::msg(format!(
-                        "Unable to parse '{}', labels must have instructions",
-                        line
-                    )));
-                }
                 let lbl = parts[0];
                 if let Some(err) = is_valid_label(lbl) {
                     return Err(Error::msg(format!(
@@ -99,7 +99,11 @@ pub(super) fn assemble(lines: Vec<String>, strings_data: HashMap<String, u16>) -
                     labels.insert(lbl.to_string(), (Some(program.len()), vec![]));
                 }
 
-                parts[1]
+                if parts.len() > 1 && !parts[1].is_empty() {
+                    parts[1]
+                } else {
+                    continue;
+                }
             } else {
                 line
             };
@@ -111,7 +115,9 @@ pub(super) fn assemble(lines: Vec<String>, strings_data: HashMap<String, u16>) -
                 program.len(),
                 &strings_data,
                 &mut used_string_keys,
+                &mut used_data_keys,
                 &mut labels,
+                &datas,
             ) {
                 Ok(mut instr) => {
                     while !instr.is_empty() {
@@ -139,8 +145,9 @@ pub(super) fn assemble(lines: Vec<String>, strings_data: HashMap<String, u16>) -
         if let Some(target) = labels[lbl].0 {
             for caller in &labels[lbl].1 {
                 let addr = (target as u16).to_be_bytes();
-                program[*caller + 1] = addr[0];
-                program[*caller + 2] = addr[1];
+                let offset = get_addr_byte_offset(program[*caller]);
+                program[*caller + offset] = addr[0];
+                program[*caller + offset + 1] = addr[1];
             }
         } else {
             return Err(Error::msg(format!("Label '{}' is never set", lbl)));
@@ -167,12 +174,13 @@ fn decode(
     pc: usize,
     strings_data: &HashMap<String, u16>,
     used_string_keys: &mut HashSet<String>,
+    used_data_keys: &mut HashSet<String>,
     labels: &mut LabelTable,
+    datas: &HashMap<String, u16>,
 ) -> Result<Vec<u8>> {
     let mut result = vec![opcode];
     for param in params {
         match param {
-            Param::Empty => {}
             Param::Number(num) => result.push(num),
             Param::DataReg(reg) => result.push(reg),
             Param::AddrReg(reg) => result.push(reg),
@@ -180,6 +188,16 @@ fn decode(
                 let bytes = addr.to_be_bytes();
                 result.push(bytes[0]);
                 result.push(bytes[1]);
+            }
+            Param::DataKey(key) => {
+                if datas.contains_key(&key) {
+                    let bytes = datas.get(&key).unwrap().to_be_bytes();
+                    result.push(bytes[0]);
+                    result.push(bytes[1]);
+                    used_data_keys.insert(key);
+                } else {
+                    return Err(Error::msg(format!("Undefined data key: {}", key)));
+                }
             }
             Param::Label(lbl) => {
                 labels.entry(lbl).or_insert((None, vec![])).1.push(pc);
@@ -246,6 +264,9 @@ fn is_invalid_constant_name(name: &str) -> bool {
             | "sub"
             | "cmp"
             | "over"
+            | "and"
+            | "or"
+            | "xor"
             | "jmp"
             | "je"
             | "jne"
@@ -253,6 +274,7 @@ fn is_invalid_constant_name(name: &str) -> bool {
             | "jg"
             | "cpy"
             | "prtd"
+            | "prts"
             | "prt"
             | "push"
             | "pop"
@@ -261,10 +283,6 @@ fn is_invalid_constant_name(name: &str) -> bool {
             | "ret"
             | "halt"
             | "nop"
-            | "lda0"
-            | "lda1"
-            | "cpya0"
-            | "cpya1"
             | "nover"
             | "fopen"
             | "filer"
@@ -273,10 +291,20 @@ fn is_invalid_constant_name(name: &str) -> bool {
             | "fskip"
             | "memr"
             | "memw"
-            | "swpar"
-            | "cmpar"
+            | "memp"
+            | "memc"
+            | "swp"
             | "prtln"
             | "arg"
+            | "ld"
+            | "ipoll"
+            | "fchk"
+            | "rstr"
+            | "rchr"
+            | "rand"
+            | "time"
+            | "seed"
+            | "not"
     )
 }
 
@@ -292,14 +320,14 @@ mod test {
             "PRT d0",
             "sample: CPY ACC D0",
             "inC D0",
-            "PRtC ACC",
+            "PRtC ' '",
             "jmP sample",
         ]
         .iter()
         .map(|line| line.to_string())
         .collect();
 
-        let result = assemble(input, HashMap::new());
+        let result = assemble(input, HashMap::new(), HashMap::new());
         assert!(result.is_ok());
 
         assert_eq!(
@@ -314,8 +342,8 @@ mod test {
                 REG_D0,
                 INC_REG,
                 REG_D0,
-                PRTC_REG,
-                REG_ACC,
+                PRTC_VAL,
+                32,
                 JMP_ADDR,
                 0,
                 4
@@ -324,6 +352,81 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
+    fn test_file_ops() {
+        let input = vec![
+            "start:",
+            "fopen d0",
+            "fseek d0",
+            "fskip d0 d0",
+            "fskip d0 11",
+            "filew d0 @1",
+            "filew d0 @xF",
+            "filew d0 a0",
+            "filer d0 @1500",
+            "filer d0 @x0",
+            "filer d0 a1",
+            "fchk d0 start",
+            "fchk d0 @41",
+            "fchk d0 a0",
+            "fopen 5",
+            "fseek 4",
+            "fskip 4 d0",
+            "fskip 4 11",
+            "filew 4 @1",
+            "filew 4 @xF",
+            "filew 4 a0",
+            "filer 4 @1500",
+            "filer 4 @x0",
+            "filer 4 a1",
+            "fchk 1 start",
+            "fchk 2 @41",
+            "fchk 3 a0",
+        ]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+
+        let mut strings = HashMap::new();
+        strings.insert(String::from("str"), 0_u16);
+
+        let result = assemble(input, strings, HashMap::new());
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            [
+                FOPEN_REG, REG_D0,
+                FSEEK_REG, REG_D0,
+                FSKIP_REG_REG, REG_D0, REG_D0,
+                FSKIP_REG_VAL, REG_D0, 11,
+                FILEW_REG_ADDR, REG_D0, 0, 1,
+                FILEW_REG_ADDR, REG_D0, 0, 15,
+                FILEW_REG_AREG, REG_D0, REG_A0,
+                FILER_REG_ADDR, REG_D0, 5, 220,
+                FILER_REG_ADDR, REG_D0, 0, 0,
+                FILER_REG_AREG, REG_D0, REG_A1,
+                FCHK_REG_ADDR, REG_D0, 0, 0,
+                FCHK_REG_ADDR, REG_D0, 0, 41,
+                FCHK_REG_AREG, REG_D0, REG_A0,
+                FOPEN_VAL, 5,
+                FSEEK_VAL, 4,
+                FSKIP_VAL_REG, 4, REG_D0,
+                FSKIP_VAL_VAL, 4, 11,
+                FILEW_VAL_ADDR, 4, 0, 1,
+                FILEW_VAL_ADDR, 4, 0, 15,
+                FILEW_VAL_AREG, 4, REG_A0,
+                FILER_VAL_ADDR, 4, 5, 220,
+                FILER_VAL_ADDR, 4, 0, 0,
+                FILER_VAL_AREG, 4, REG_A1,
+                FCHK_VAL_ADDR, 1, 0, 0,
+                FCHK_VAL_ADDR, 2, 0, 41,
+                FCHK_VAL_AREG, 3, REG_A0
+            ]
+        );
+    }
+
+    #[test]
+    #[rustfmt::skip]
     fn test_all_ops() {
         let input = vec![
             "start: CPY D1 0",
@@ -338,6 +441,122 @@ mod test {
             "dec a1",
             "CMP D1 xF",
             "cmp d3 d3",
+            "memr a0",
+            "memr @xa2",
+            "memw a1",
+            "memw @911",
+            "prtc 0",
+            "prtc acc",
+            "prt 0",
+            "prt acc",
+            "prtln",
+            "call a0",
+            "call start",
+            "push a0",
+            "push d3",
+            "push 99",
+            "push xFF",
+            "pop d3",
+            "ret",
+            "nop",
+            "halt",
+            "arg d0 d1",
+            "arg d2 3",
+            "and d2 d3",
+            "and d1 10",
+            "and d3 a0",
+            "or d2 d3",
+            "or d1 10",
+            "or d3 a0",
+            "xor d2 d3",
+            "xor d1 10",
+            "xor d3 a0",
+            "not d0",
+            "rand acc",
+            "seed d3",
+            "time",
+            "add d0 a0",
+            "sub d0 a0",
+            "and d0 a0",
+            "or d0 a0",
+            "xor d0 a0",
+            "memp a0",
+            "memp @99",
+            "prtd a0",
+        ]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+
+        let mut strings = HashMap::new();
+        strings.insert(String::from("str"), 0_u16);
+
+        let result = assemble(input, strings, HashMap::new()).unwrap();
+        assert_eq!(
+            result,
+            [
+                CPY_REG_VAL, REG_D1, 0,
+                CPY_REG_REG, REG_D2, REG_ACC,
+                ADD_REG_VAL, REG_D3, 0,
+                ADD_REG_REG, REG_D1, REG_D2,
+                SUB_REG_VAL, REG_ACC, 16,
+                SUB_REG_REG, REG_ACC, REG_D0,
+                INC_REG, REG_D0,
+                INC_REG, REG_A0,
+                DEC_REG, REG_D1,
+                DEC_REG, REG_A1,
+                CMP_REG_VAL, REG_D1, 15,
+                CMP_REG_REG, REG_D3, REG_D3,
+                MEMR_AREG, REG_A0,
+                MEMR_ADDR, 0, 162,
+                MEMW_AREG, REG_A1,
+                MEMW_ADDR, 3, 143,
+                PRTC_VAL, 0, PRTC_REG,
+                REG_ACC, PRT_VAL, 0,
+                PRT_REG, REG_ACC,
+                PRTLN,
+                CALL_AREG, REG_A0,
+                CALL_ADDR, 0, 0,
+                PUSH_REG, REG_A0,
+                PUSH_REG, REG_D3,
+                PUSH_VAL, 99,
+                PUSH_VAL, 255,
+                POP_REG, REG_D3,
+                RET,
+                NOP,
+                HALT,
+                ARG_REG_REG, REG_D0, REG_D1,
+                ARG_REG_VAL, REG_D2, 3,
+                AND_REG_REG, REG_D2, REG_D3,
+                AND_REG_VAL, REG_D1, 10,
+                AND_REG_AREG, REG_D3, REG_A0,
+                OR_REG_REG, REG_D2, REG_D3,
+                OR_REG_VAL, REG_D1, 10,
+                OR_REG_AREG, REG_D3, REG_A0,
+                XOR_REG_REG, REG_D2, REG_D3,
+                XOR_REG_VAL, REG_D1, 10,
+                XOR_REG_AREG, REG_D3, REG_A0,
+                NOT_REG, REG_D0,
+                RAND_REG, REG_ACC,
+                SEED_REG, REG_D3,
+                TIME,
+                ADD_REG_AREG, REG_D0, REG_A0,
+                SUB_REG_AREG, REG_D0, REG_A0,
+                AND_REG_AREG, REG_D0, REG_A0,
+                OR_REG_AREG, REG_D0, REG_A0,
+                XOR_REG_AREG, REG_D0, REG_A0,
+                MEMP_AREG, REG_A0,
+                MEMP_ADDR, 0, 99,
+                PRTD_AREG, REG_A0,
+            ]
+        );
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_jump_ops() {
+        let input = vec![
+            "start:",
             "jmp start",
             "jmp @xfFf",
             "jmp a0",
@@ -358,208 +577,40 @@ mod test {
             "over a0",
             "nover start",
             "nover @0",
-            "nover a0",
-            "memr a0",
-            "memr @xa2",
-            "memw a1",
-            "memw @911",
-            "fopen",
-            "fseek",
-            "fskip d0",
-            "fskip 11",
-            "filew @1",
-            "filew @xF",
-            "filew a0",
-            "filer @1500",
-            "filer @x0",
-            "filer a1",
-            "prtc 0",
-            "prtc acc",
-            "prt 0",
-            "prt acc",
-            "prtd str",
-            "prtln",
-            "call a0",
-            "call start",
-            "push a0",
-            "push d3",
-            "push 99",
-            "push xFF",
-            "pop d3",
-            "ret",
-            "nop",
-            "halt",
-            "arg d0 d1",
-            "arg d2 3",
+            "nover a0"
         ]
-        .iter()
-        .map(|line| line.to_string())
-        .collect();
+            .iter()
+            .map(|line| line.to_string())
+            .collect();
 
         let mut strings = HashMap::new();
         strings.insert(String::from("str"), 0_u16);
 
-        let result = assemble(input, strings);
-        assert!(result.is_ok());
+        let result = assemble(input, strings, HashMap::new()).unwrap();
         assert_eq!(
-            result.unwrap(),
+            result,
             [
-                CPY_REG_VAL,
-                REG_D1,
-                0,
-                CPY_REG_REG,
-                REG_D2,
-                REG_ACC,
-                ADD_REG_VAL,
-                REG_D3,
-                0,
-                ADD_REG_REG,
-                REG_D1,
-                REG_D2,
-                SUB_REG_VAL,
-                REG_ACC,
-                16,
-                SUB_REG_REG,
-                REG_ACC,
-                REG_D0,
-                INC_REG,
-                REG_D0,
-                INC_REG,
-                REG_A0,
-                DEC_REG,
-                REG_D1,
-                DEC_REG,
-                REG_A1,
-                CMP_REG_VAL,
-                REG_D1,
-                15,
-                CMP_REG_REG,
-                REG_D3,
-                REG_D3,
-                JMP_ADDR,
-                0,
-                0,
-                JMP_ADDR,
-                15,
-                255,
-                JMP_AREG,
-                REG_A0,
-                JE_ADDR,
-                0,
-                0,
-                JE_ADDR,
-                0,
-                0,
-                JE_AREG,
-                REG_A0,
-                JNE_ADDR,
-                0,
-                0,
-                JNE_ADDR,
-                0,
-                0,
-                JNE_AREG,
-                REG_A0,
-                JG_ADDR,
-                0,
-                0,
-                JG_ADDR,
-                0,
-                0,
-                JG_AREG,
-                REG_A0,
-                JL_ADDR,
-                0,
-                0,
-                JL_ADDR,
-                0,
-                0,
-                JL_AREG,
-                REG_A0,
-                OVER_ADDR,
-                0,
-                0,
-                OVER_ADDR,
-                0,
-                0,
-                OVER_AREG,
-                REG_A0,
-                NOVER_ADDR,
-                0,
-                0,
-                NOVER_ADDR,
-                0,
-                0,
-                NOVER_AREG,
-                REG_A0,
-                MEMR_AREG,
-                REG_A0,
-                MEMR_ADDR,
-                0,
-                162,
-                MEMW_AREG,
-                REG_A1,
-                MEMW_ADDR,
-                3,
-                143,
-                FOPEN,
-                FSEEK,
-                FSKIP_REG,
-                REG_D0,
-                FSKIP_VAL,
-                11,
-                FILEW_ADDR,
-                0,
-                1,
-                FILEW_ADDR,
-                0,
-                15,
-                FILEW_AREG,
-                REG_A0,
-                FILER_ADDR,
-                5,
-                220,
-                FILER_ADDR,
-                0,
-                0,
-                FILER_AREG,
-                REG_A1,
-                PRTC_VAL,
-                0,
-                PRTC_REG,
-                REG_ACC,
-                PRT_VAL,
-                0,
-                PRT_REG,
-                REG_ACC,
-                PRTD_STR,
-                0,
-                0,
-                PRTLN,
-                CALL_AREG,
-                REG_A0,
-                CALL_ADDR,
-                0,
-                0,
-                PUSH_REG,
-                REG_A0,
-                PUSH_REG,
-                REG_D3,
-                PUSH_VAL,
-                99,
-                PUSH_VAL,
-                255,
-                POP_REG,
-                REG_D3,
-                RET,
-                NOP,
-                HALT,
-                ARG_REG_REG,
-                REG_D0,
-                REG_D1,
-                ARG_REG_VAL,
-                REG_D2,
-                3
+                JMP_ADDR, 0, 0,
+                JMP_ADDR, 15, 255,
+                JMP_AREG, REG_A0,
+                JE_ADDR, 0, 0,
+                JE_ADDR, 0, 0,
+                JE_AREG, REG_A0,
+                JNE_ADDR, 0, 0,
+                JNE_ADDR, 0, 0,
+                JNE_AREG, REG_A0,
+                JG_ADDR, 0, 0,
+                JG_ADDR, 0, 0,
+                JG_AREG, REG_A0,
+                JL_ADDR, 0, 0,
+                JL_ADDR, 0, 0,
+                JL_AREG, REG_A0,
+                OVER_ADDR, 0, 0,
+                OVER_ADDR, 0, 0,
+                OVER_AREG, REG_A0,
+                NOVER_ADDR, 0, 0,
+                NOVER_ADDR, 0, 0,
+                NOVER_AREG, REG_A0,
             ]
         );
     }
@@ -567,14 +618,19 @@ mod test {
     #[test]
     fn test_invalid_label() {
         let input = vec![String::from("JMP nowhere")];
-        let result = assemble(input, HashMap::new());
+        let result = assemble(input, HashMap::new(), HashMap::new());
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_string() {
-        let input = vec![String::from("PRTD nowhere")];
-        let result = assemble(input, HashMap::new());
+        let input = vec![String::from("PRTS nowhere")];
+        let result = assemble(input, HashMap::new(), HashMap::new());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_datas() {
+        // let input = vec![String::from()]
     }
 }

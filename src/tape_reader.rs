@@ -6,6 +6,7 @@ pub struct Tape {
     pub name: String,
     pub version: String,
     pub ops: Vec<u8>,
+    pub strings: Vec<u8>,
     pub data: Vec<u8>,
 }
 
@@ -30,11 +31,20 @@ pub fn read_tape(path: &str) -> Result<Tape> {
     for _ in 0..pc_byte_count {
         ops.push(get_byte(&mut bytes, &mut idx, "program")?);
     }
+    let strings_byte_count = u16::from_be_bytes([
+        get_byte(&mut bytes, &mut idx, "string count")?,
+        get_byte(&mut bytes, &mut idx, "string count")?,
+    ]) as usize;
+    let mut strings = vec![];
+    for _ in 0..strings_byte_count {
+        strings.push(get_byte(&mut bytes, &mut idx, "strings")?);
+    }
 
     Ok(Tape {
         name,
         version,
         ops,
+        strings,
         data: bytes,
     })
 }

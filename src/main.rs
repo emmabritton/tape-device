@@ -4,7 +4,7 @@
 extern crate bitflags;
 
 use anyhow::Result;
-use clap::{crate_authors, crate_name, crate_version, App, AppSettings, Arg, SubCommand};
+use clap::{crate_authors, crate_name, crate_version, App, AppSettings, Arg, SubCommand, Values};
 use git_version::git_version;
 
 mod assembler;
@@ -26,22 +26,14 @@ fn main() -> Result<()> {
             AppSettings::VersionlessSubcommands,
         ])
         .subcommand(
-            SubCommand::with_name("assemble")
-                .arg(
-                    Arg::with_name("keep_whitespace")
-                        .long("keep_whitespace")
-                        .help("Keep whitespace at end of strings")
-                        .takes_value(false)
-                        .multiple(false),
-                )
-                .arg(
-                    Arg::with_name("file")
-                        .help("Compile .tasm into .tape")
-                        .takes_value(true)
-                        .min_values(1)
-                        .max_values(2)
-                        .required(true),
-                ),
+            SubCommand::with_name("assemble").arg(
+                Arg::with_name("file")
+                    .help("Compile .basm into .tape")
+                    .takes_value(true)
+                    .min_values(1)
+                    .max_values(2)
+                    .required(true),
+            ),
         )
         .subcommand(
             SubCommand::with_name("decompile").arg(
@@ -65,7 +57,7 @@ fn main() -> Result<()> {
                     Arg::with_name("input")
                         .help("Data tape for reading/writing")
                         .takes_value(true)
-                        .multiple(false)
+                        .multiple(true)
                         .required(false),
                 ),
         )
@@ -80,15 +72,21 @@ fn main() -> Result<()> {
             Arg::with_name("input")
                 .help("Data tape for reading/writing")
                 .takes_value(true)
-                .multiple(false)
+                .multiple(true)
                 .required(false),
         )
         .get_matches();
 
     if matches.is_present("tape") {
-        device::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;
+        device::start(
+            matches.value_of("tape").unwrap(),
+            convert(matches.values_of("input")),
+        )?;
     } else if let Some(matches) = matches.subcommand_matches("run") {
-        device::start(matches.value_of("tape").unwrap(), matches.value_of("input"))?;
+        device::start(
+            matches.value_of("tape").unwrap(),
+            convert(matches.values_of("input")),
+        )?;
     } else if let Some(matches) = matches.subcommand_matches("assemble") {
         assembler::start(
             matches.value_of("file").unwrap(),
@@ -99,4 +97,12 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn convert(values: Option<Values>) -> Vec<&str> {
+    if let Some(values) = values {
+        values.collect()
+    } else {
+        vec![]
+    }
 }

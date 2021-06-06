@@ -10,11 +10,14 @@ license-file = "LICENSE"
 [dependencies]
 anyhow = "1.0.40"
 bitflags = "1.2.1"
+chrono = "0.4.19"
 clap = "2.33.3"
 #ui dependencies
 crossterm = "0.19.0"
 git-version = "0.3.4"
 lazy_static = "1.4.0"
+random-fast-rng = "0.1.1"
+regex = "1.5.4"
 scopeguard = "1.1.0"
 tui = { git = "https://github.com/raybritton/tui-rs.git", branch = "scroll-from-bottom", default-features = false, features = ["crossterm"] }
 

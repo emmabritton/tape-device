@@ -11,15 +11,15 @@ ex_mem=This is from data loaded into memory and read back out as chars:
 ex_file=This is from data loaded from a file and read out as chars:
 file_error=No input file, check note at top of tasm file
 .ops
-        fchk prog
+        fchk 0 prog
         prtln
-        prtd file_error
+        prts file_error
         prtln
         halt
         #Print string data example
-prog:   PRTD ex_string     #print string named ex_string
+prog:   prts ex_string     #print string named ex_string
         PRTLN              #newline
-        PRTD greeting      #print string named greeting
+        prts greeting      #print string named greeting
         PRTLN              #newline
 
         #Letter values in ASCII
@@ -27,9 +27,9 @@ prog:   PRTD ex_string     #print string named ex_string
         const e 101
         const l 108
         const o 111
-        const W 87
-        const r 114
-        const d 100
+        const W 'W' #These letters
+        const r 'r' #are converted to
+        const d 'd' #their ASCII num
         const space 32
 
         #Prepare memory
@@ -54,39 +54,39 @@ prog:   PRTD ex_string     #print string named ex_string
         memw @10           #write value in ACC to memory address 10
 
         #Print from memory
-        PRTD ex_mem        #print string named ex_mem
+        prts ex_mem        #print string named ex_mem
         PRTLN              #newline
-        cpya1 @11          #set A1 to memory address 11
-        cpya0 @0           #set A0 to memory address 0
+        cpy a1 @11         #set A1 to memory address 11
+        cpy a0 @0          #set A0 to memory address 0
 print:  memr a0            #read value from memory at address in A0 and set in ACC
         prtc acc           #print value in ACC as ASCII
         inc a0             #increment value in A0
-        cmpar              #compare A0 and A1
+        cmp a0 a1          #compare A0 and A1
         jne print          #if they were not equal jump to print
         PRTLN              #newline
 
         #Clear memory
-        cpya1 @11          #set A1 to memory address 11
-        cpya0 @0           #set A0 to memory address 0
+        cpy a1 @11         #set A1 to memory address 11
+        cpy a0 @0          #set A0 to memory address 0
         cpy acc 0          #set ACC to 0
 clear:  memw a0            #write value in ACC to memory at address in A0
         inc A0             #increment A0
-        cmpar              #compare A0 and A1
+        cmp a0 a1          #compare A0 and A1
         jne clear          #if they were not equal jump to clear
 
         #Read from file
         #Program will crash if file not available
-        prtd ex_file       #print string named ex_file
+        prts ex_file       #print string named ex_file
         prtln              #newline
-        fopen              #Open file
+        fopen 0            #Open file
         cpy acc 10         #Set ACC to 10, this is used by filer as the max byte read count
-        filer @0           #Read bytes from read and save in memory at address in A0
-        cpya1 @10          #set A1 to memory address 11
-        cpya0 @0           #set A0 to memory address 0
+        filer 0 @0         #Read bytes from file and save in memory at address in A0
+        cpy a1 @10         #set A1 to memory address 11
+        cpy a0 @0          #set A0 to memory address 0
 fprint: memr a0            #read value from memory at address in A0 and set in ACC
         prtc acc           #print value in ACC as ASCII
         inc a0             #increment value in A0
-        cmpar              #compare A0 and A1
+        cmp a0 a1          #compare A0 and A1
         jne fprint         #if they were not equal jump to fprint
         PRTLN              #newline
 

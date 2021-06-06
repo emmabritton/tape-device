@@ -14,8 +14,7 @@ Language (vm, compiler, decompiler) for fictional computer that executes program
     - Overflow: Overflow flag
     - PC: Program counter
 - RAM: 65,535 bytes
-- Max program length: 65,535 bytes
-- Max string data: 65,535 bytes (max length per string: 255 bytes)
+- Max program length: 65,535 bytes (includes data and strings)
 
 ## Info
 
@@ -29,16 +28,18 @@ PRT ACC
 
 Prints `3`
 
+See [docs](https://github.com/raybritton/tape-device/blob/master/language.md) for more info
+
 ## Usage
 
 **Execute program**
 ```
-tape-device program.tape [input]
+tape-device program.tape [input0] [input1]...
 ```
 
 **Assemble program**
 ```
-tape-device assemble program.tasm
+tape-device assemble program.basm
 ```
 
 **Decompile program**

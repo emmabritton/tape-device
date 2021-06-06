@@ -4,9 +4,12 @@ use crate::constants::{compare, get_byte_count, is_jump_op};
 use crate::device::internals::RunResult::{Breakpoint, EoF, ProgError};
 use crate::printer::{Printer, RcBox};
 use anyhow::{Error, Result};
+use chrono::{Local, Timelike};
+use random_fast_rng::{FastRng, Random};
 use std::cmp::Ordering;
 use std::fs::{File, OpenOptions};
 use std::io::{stdin, Read, Seek, SeekFrom, Write};
+use std::ops::{BitAnd, BitOr, BitXor, Not};
 use std::time::Duration;
 
 const SP_MAX: u16 = u16::MAX;
@@ -15,8 +18,9 @@ const KEY_CODE_RETURN: u8 = 10;
 pub struct Device {
     mem: [u8; RAM_SIZE],
     tape_ops: Vec<u8>,
+    tape_strings: Vec<u8>,
     tape_data: Vec<u8>,
-    input_data: Option<String>,
+    data_files: Vec<String>,
     flags: Flags,
     pc: u16,
     acc: u8,
@@ -24,9 +28,10 @@ pub struct Device {
     fp: u16,
     data_reg: [u8; DATA_REG_COUNT],
     addr_reg: [u16; ADDR_REG_COUNT],
-    file: Option<File>,
+    files: Vec<Option<File>>,
     breakpoints: Vec<u16>,
     printer: RcBox<dyn Printer>,
+    rng: FastRng,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -67,10 +72,15 @@ pub enum RunResult {
 impl Device {
     pub fn new(
         ops: Vec<u8>,
+        strings: Vec<u8>,
         data: Vec<u8>,
-        input_file: Option<String>,
+        data_files: Vec<String>,
         printer: RcBox<dyn Printer>,
     ) -> Self {
+        let mut files = Vec::with_capacity(data_files.len());
+        for _ in 0..data_files.len() {
+            files.push(None);
+        }
         Device {
             mem: [0; RAM_SIZE],
             flags: Flags::default(),
@@ -82,10 +92,12 @@ impl Device {
             fp: SP_MAX,
             breakpoints: vec![],
             tape_ops: ops,
+            tape_strings: strings,
             tape_data: data,
-            input_data: input_file,
-            file: None,
+            data_files,
+            files,
             printer,
+            rng: FastRng::new(),
         }
     }
 }
@@ -168,25 +180,19 @@ impl Device {
                     dump.acc, dump.data_reg[0], dump.data_reg[1], dump.data_reg[2], dump.data_reg[3], dump.addr_reg[0], dump.addr_reg[1]
                 ));
                 self.elog(&format!(
-                    "PC: {:4} SP: {:4X} FP: {:4X} File open: {} Overflowed: {}",
-                    dump.pc,
-                    dump.sp,
-                    dump.fp,
-                    self.file.is_some(),
-                    dump.overflow
+                    "PC: {:4} SP: {:4X} FP: {:4X} Overflowed: {}",
+                    dump.pc, dump.sp, dump.fp, dump.overflow
                 ));
                 false
             }
         };
     }
 
-    fn cond_jump(&mut self, should_jump: bool, addr: u16, from_areg: bool) {
+    fn cond_jump(&mut self, should_jump: bool, addr: u16, opcode: u8) {
         if should_jump {
             self.jump(addr)
-        } else if from_areg {
-            self.pc += 2;
         } else {
-            self.pc += 3;
+            self.pc += get_byte_count(opcode) as u16;
         }
     }
 
@@ -244,63 +250,63 @@ impl Device {
             JE_AREG => self.cond_jump(
                 self.acc == compare::EQUAL,
                 self.get_addr_reg(self.tape_ops[idx + 1])?,
-                true,
+                JE_AREG,
             ),
             JL_AREG => self.cond_jump(
                 self.acc == compare::LESSER,
                 self.get_addr_reg(self.tape_ops[idx + 1])?,
-                true,
+                JL_AREG,
             ),
             JG_AREG => self.cond_jump(
                 self.acc == compare::GREATER,
                 self.get_addr_reg(self.tape_ops[idx + 1])?,
-                true,
+                JG_AREG,
             ),
             JNE_AREG => self.cond_jump(
                 self.acc != compare::EQUAL,
                 self.get_addr_reg(self.tape_ops[idx + 1])?,
-                true,
+                JNE_AREG,
             ),
             OVER_AREG => self.cond_jump(
                 self.flags.overflow,
                 self.get_addr_reg(self.tape_ops[idx + 1])?,
-                true,
+                OVER_AREG,
             ),
             NOVER_AREG => self.cond_jump(
                 !self.flags.overflow,
                 self.get_addr_reg(self.tape_ops[idx + 1])?,
-                true,
+                NOVER_AREG,
             ),
             JMP_ADDR => self.jump(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
             JE_ADDR => self.cond_jump(
                 self.acc == compare::EQUAL,
                 addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
-                false,
+                JE_ADDR,
             ),
             JL_ADDR => self.cond_jump(
                 self.acc == compare::LESSER,
                 addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
-                false,
+                JL_ADDR,
             ),
             JG_ADDR => self.cond_jump(
                 self.acc == compare::GREATER,
                 addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
-                false,
+                JG_ADDR,
             ),
             JNE_ADDR => self.cond_jump(
                 self.acc != compare::EQUAL,
                 addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
-                false,
+                JNE_ADDR,
             ),
             OVER_ADDR => self.cond_jump(
                 self.flags.overflow,
                 addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
-                false,
+                OVER_ADDR,
             ),
             NOVER_ADDR => self.cond_jump(
                 !self.flags.overflow,
                 addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
-                false,
+                NOVER_ADDR,
             ),
             INC_REG => self.change(self.tape_ops[idx + 1], 1)?,
             DEC_REG => self.change(self.tape_ops[idx + 1], -1)?,
@@ -341,15 +347,60 @@ impl Device {
             PRTLN => {
                 self.printer.borrow_mut().newline();
             }
-            PRTD_STR => self.print_dat(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
-            FOPEN => self.open_file()?,
-            FILER_ADDR => self.read_file(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
-            FILER_AREG => self.read_file(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
-            FILEW_AREG => self.write_file(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
-            FILEW_ADDR => self.write_file(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
-            FSEEK => self.seek_file()?,
-            FSKIP_REG => self.skip_file(self.get_reg(self.tape_ops[idx + 1])?)?,
-            FSKIP_VAL => self.skip_file(self.tape_ops[idx + 1])?,
+            PRTS_STR => {
+                self.print_tape_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))
+            }
+            FOPEN_REG => self.open_file(self.get_reg(self.tape_ops[idx + 1])? as usize)?,
+            FILER_REG_ADDR => self.read_file(
+                self.get_reg(self.tape_ops[idx + 1])? as usize,
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+            )?,
+            FILER_REG_AREG => self.read_file(
+                self.get_reg(self.tape_ops[idx + 1])? as usize,
+                self.get_addr_reg(self.tape_ops[idx + 2])?,
+            )?,
+            FILEW_REG_AREG => self.write_file(
+                self.get_reg(self.tape_ops[idx + 1])? as usize,
+                self.get_addr_reg(self.tape_ops[idx + 2])?,
+            )?,
+            FILEW_REG_ADDR => self.write_file(
+                self.get_reg(self.tape_ops[idx + 1])? as usize,
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+            )?,
+            FSEEK_REG => self.seek_file(self.get_reg(self.tape_ops[idx + 1])? as usize)?,
+            FSKIP_REG_REG => self.skip_file(
+                self.get_reg(self.tape_ops[idx + 1])? as usize,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            )?,
+            FSKIP_REG_VAL => self.skip_file(
+                self.get_reg(self.tape_ops[idx + 1])? as usize,
+                self.tape_ops[idx + 2],
+            )?,
+            FOPEN_VAL => self.open_file(self.tape_ops[idx + 1] as usize)?,
+            FILER_VAL_ADDR => self.read_file(
+                self.tape_ops[idx + 1] as usize,
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+            )?,
+            FILER_VAL_AREG => self.read_file(
+                self.tape_ops[idx + 1] as usize,
+                self.get_addr_reg(self.tape_ops[idx + 2])?,
+            )?,
+            FILEW_VAL_AREG => self.write_file(
+                self.tape_ops[idx + 1] as usize,
+                self.get_addr_reg(self.tape_ops[idx + 2])?,
+            )?,
+            FILEW_VAL_ADDR => self.write_file(
+                self.tape_ops[idx + 1] as usize,
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+            )?,
+            FSEEK_VAL => self.seek_file(self.tape_ops[idx + 1] as usize)?,
+            FSKIP_VAL_REG => self.skip_file(
+                self.tape_ops[idx + 1] as usize,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            )?,
+            FSKIP_VAL_VAL => {
+                self.skip_file(self.tape_ops[idx + 1] as usize, self.tape_ops[idx + 2])?
+            }
             HALT => return Ok(false),
             PUSH_VAL => self.stack_push(self.tape_ops[idx + 1]),
             PUSH_REG => self.stack_push_reg(self.tape_ops[idx + 1])?,
@@ -374,18 +425,56 @@ impl Device {
             RCHR_REG => self.read_char(self.tape_ops[idx + 1])?,
             RSTR_ADDR => self.read_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
             RSTR_AREG => self.read_string(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
-            PSTR_ADDR => self.print_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
-            PSTR_AREG => self.print_string(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
-            FCHK_ADDR => self.cond_jump(
-                self.input_data.is_some(),
-                addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]),
-                false,
+            MEMP_ADDR => self.print_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
+            MEMP_AREG => self.print_string(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
+            FCHK_REG_ADDR => self.cond_jump(
+                self.files.len() > self.get_reg(self.tape_ops[idx + 1])? as usize,
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+                FCHK_REG_ADDR,
             ),
-            FCHK_AREG => self.cond_jump(
-                self.input_data.is_some(),
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
-                true,
+            FCHK_REG_AREG => self.cond_jump(
+                self.files.len() > self.get_reg(self.tape_ops[idx + 1])? as usize,
+                self.get_addr_reg(self.tape_ops[idx + 2])?,
+                FCHK_REG_AREG,
             ),
+            FCHK_VAL_ADDR => self.cond_jump(
+                self.files.len() > self.tape_ops[idx + 1] as usize,
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+                FCHK_VAL_ADDR,
+            ),
+            FCHK_VAL_AREG => self.cond_jump(
+                self.files.len() > self.tape_ops[idx + 1] as usize,
+                self.get_addr_reg(self.tape_ops[idx + 2])?,
+                FCHK_VAL_AREG,
+            ),
+            TIME => self.get_time(),
+            RAND_REG => self.rand(self.tape_ops[idx + 1])?,
+            SEED_REG => self.seed(self.tape_ops[idx + 1])?,
+            AND_REG_REG => self.bit_and(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            ),
+            AND_REG_VAL => self.bit_and(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.tape_ops[idx + 2],
+            ),
+            OR_REG_REG => self.bit_or(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            ),
+            OR_REG_VAL => self.bit_or(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.tape_ops[idx + 2],
+            ),
+            XOR_REG_REG => self.bit_xor(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg(self.tape_ops[idx + 2])?,
+            ),
+            XOR_REG_VAL => self.bit_xor(
+                self.get_reg(self.tape_ops[idx + 1])?,
+                self.tape_ops[idx + 2],
+            ),
+            NOT_REG => self.bit_not(self.get_reg(self.tape_ops[idx + 1])?),
             _ => {
                 return Err(Error::msg(format!(
                     "Unknown instruction: {:02X}",
@@ -550,11 +639,11 @@ impl Device {
     fn read_string(&mut self, addr: u16) -> Result<()> {
         let mut char = [0_u8; 1];
         let mut read_count = 0;
-        stdin().read(&mut char)?;
+        stdin().read_exact(&mut char)?;
         while read_count < 255 && char[0] != KEY_CODE_RETURN {
             let mem = addr as usize + read_count;
             self.mem[mem] = char[0];
-            stdin().read(&mut char)?;
+            stdin().read_exact(&mut char)?;
             read_count += 1;
         }
         self.acc = read_count as u8;
@@ -575,7 +664,7 @@ impl Device {
 
     fn read_char(&mut self, reg: u8) -> Result<()> {
         let mut char = [0_u8; 1];
-        stdin().read(&mut char)?;
+        stdin().read_exact(&mut char)?;
 
         match reg {
             REG_ACC => self.acc = char[0],
@@ -604,32 +693,35 @@ impl Device {
         Ok(())
     }
 
-    fn open_file(&mut self) -> Result<()> {
-        if self.file.is_some() {
-            return Err(Error::msg("File already open"));
+    fn open_file(&mut self, file_num: usize) -> Result<()> {
+        if self.files[file_num].is_some() {
+            return Err(Error::msg(format!("File {} already open", file_num)));
         }
-        return if let Some(path) = &self.input_data {
-            let mut file = OpenOptions::new().read(true).write(true).open(path)?;
-            let pos = file
-                .seek(SeekFrom::End(0))
-                .expect("Unable to get file length");
-            self.data_reg[3] = (pos & 0xFF) as u8;
-            self.data_reg[2] = (pos.rotate_right(8) & 0xFF) as u8;
-            self.data_reg[1] = (pos.rotate_right(16) & 0xFF) as u8;
-            self.data_reg[0] = (pos.rotate_right(24) & 0xFF) as u8;
-            file.seek(SeekFrom::Start(0))
-                .expect("Unable to reset file cursor");
-            self.file = Some(file);
+        if self.data_files.len() <= file_num {
+            return Err(Error::msg(format!("File {} not provided", file_num)));
+        }
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&self.data_files[file_num])?;
+        let pos = file
+            .seek(SeekFrom::End(0))
+            .expect("Unable to get file length");
+        self.data_reg[3] = (pos & 0xFF) as u8;
+        self.data_reg[2] = (pos.rotate_right(8) & 0xFF) as u8;
+        self.data_reg[1] = (pos.rotate_right(16) & 0xFF) as u8;
+        self.data_reg[0] = (pos.rotate_right(24) & 0xFF) as u8;
+        file.seek(SeekFrom::Start(0))
+            .expect("Unable to reset file cursor");
+        self.files.insert(file_num, Some(file));
 
-            Ok(())
-        } else {
-            Err(Error::msg("No input file path set"))
-        };
+        Ok(())
     }
 
-    fn seek_file(&mut self) -> Result<()> {
-        match &mut self.file {
-            None => Err(Error::msg("No file open")),
+    fn seek_file(&mut self, file_num: usize) -> Result<()> {
+        match &mut self.files[file_num] {
+            None => Err(Error::msg(format!("File {} not open", file_num))),
             Some(file) => {
                 let addr = u64::from_be_bytes([
                     0,
@@ -649,9 +741,9 @@ impl Device {
         }
     }
 
-    fn read_file(&mut self, addr: u16) -> Result<()> {
-        match &mut self.file {
-            None => Err(Error::msg("No file open")),
+    fn read_file(&mut self, file_num: usize, addr: u16) -> Result<()> {
+        match &mut self.files[file_num] {
+            None => Err(Error::msg(format!("File {} not open", file_num))),
             Some(file) => {
                 let mut buffer = vec![0_u8; self.acc as usize];
                 match file.read(&mut buffer) {
@@ -671,9 +763,9 @@ impl Device {
         }
     }
 
-    fn write_file(&mut self, addr: u16) -> Result<()> {
-        match &mut self.file {
-            None => Err(Error::msg("No file open")),
+    fn write_file(&mut self, file_num: usize, addr: u16) -> Result<()> {
+        match &mut self.files[file_num] {
+            None => Err(Error::msg(format!("File {} not open", file_num))),
             Some(file) => {
                 let buffer = &self.mem[(addr as usize)..((addr + self.acc as u16) as usize)];
                 match file.write(buffer) {
@@ -689,9 +781,9 @@ impl Device {
         }
     }
 
-    fn skip_file(&mut self, val: u8) -> Result<()> {
-        match &mut self.file {
-            None => Err(Error::msg("No file open")),
+    fn skip_file(&mut self, file_num: usize, val: u8) -> Result<()> {
+        match &mut self.files[file_num] {
+            None => Err(Error::msg(format!("File {} not open", file_num))),
             Some(file) => {
                 let mut buffer = vec![0_u8; val as usize];
                 match file.read(&mut buffer) {
@@ -710,17 +802,69 @@ impl Device {
         self.log(&format!("{}", val));
     }
 
-    fn print_dat(&mut self, data_addr: u16) {
-        let length = self.tape_data[data_addr as usize] as usize;
+    fn bit_and(&mut self, lhs: u8, rhs: u8) {
+        self.acc = lhs.bitand(rhs);
+    }
+
+    fn bit_or(&mut self, lhs: u8, rhs: u8) {
+        self.acc = lhs.bitor(rhs);
+    }
+
+    fn bit_xor(&mut self, lhs: u8, rhs: u8) {
+        self.acc = lhs.bitxor(rhs);
+    }
+
+    fn bit_not(&mut self, value: u8) {
+        self.acc = value.not();
+    }
+
+    fn print_tape_string(&mut self, data_addr: u16) {
+        let length = self.tape_strings[data_addr as usize] as usize;
         let str_start = (data_addr + 1) as usize;
         for i in 0..length {
             let chr_addr = str_start + i;
-            self.log(&format!("{}", self.tape_data[chr_addr] as char));
+            self.log(&format!("{}", self.tape_strings[chr_addr] as char));
         }
     }
 
     fn printc(&mut self, val: u8) {
         self.log(&format!("{}", val as char));
+    }
+
+    fn get_time(&mut self) {
+        let time = Local::now();
+        let hour = time.hour() as u8;
+        let minute = time.minute() as u8;
+        let second = time.second() as u8;
+        self.data_reg[0] = second;
+        self.data_reg[1] = minute;
+        self.data_reg[2] = hour;
+    }
+
+    fn seed(&mut self, reg: u8) -> Result<()> {
+        let value = match reg {
+            REG_ACC => self.acc,
+            REG_D0 => self.data_reg[0],
+            REG_D1 => self.data_reg[1],
+            REG_D2 => self.data_reg[2],
+            REG_D3 => self.data_reg[3],
+            _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
+        };
+        self.rng = FastRng::seed(value as u64, value.not() as u64);
+        Ok(())
+    }
+
+    fn rand(&mut self, reg: u8) -> Result<()> {
+        let num = self.rng.get_u8();
+        match reg {
+            REG_ACC => self.acc = num,
+            REG_D0 => self.data_reg[0] = num,
+            REG_D1 => self.data_reg[1] = num,
+            REG_D2 => self.data_reg[2] = num,
+            REG_D3 => self.data_reg[3] = num,
+            _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
+        };
+        Ok(())
     }
 
     fn swap(&mut self, reg1: u8, reg2: u8) -> Result<()> {
@@ -999,7 +1143,7 @@ mod test {
             HALT,
         ];
         let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], None, printer.clone());
+        let mut device = Device::new(ops, vec![], vec![], vec![],printer.clone());
 
         assert_eq!(device.dump(), Dump::default());
 
@@ -1042,7 +1186,7 @@ mod test {
             DEC_REG, REG_A0,
         ];
         let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], None, printer.clone());
+        let mut device = Device::new(ops, vec![], vec![], vec![],printer.clone());
 
         assert_eq!(device.dump(), Dump::default());
 
@@ -1066,7 +1210,7 @@ mod test {
             CPY_REG_VAL, REG_D0, 5,CPY_REG_VAL, REG_D1, 5, CPY_REG_VAL, REG_D2, 5,CPY_REG_VAL, REG_D3, 5,CPY_REG_VAL, REG_ACC, 5
         ];
         let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], None, printer.clone());
+        let mut device = Device::new(ops, vec![], vec![], vec![],printer.clone());
 
         assert_eq!(device.dump(), Dump::default());
 
@@ -1108,7 +1252,7 @@ mod test {
         ];
 
         let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], None, printer.clone());
+        let mut device = Device::new(ops, vec![], vec![], vec![],printer.clone());
 
         assert_eq!(device.dump(), Dump::default());
         assert_step_device("PUSH D0 10", &mut device, Dump {pc: 3,data_reg:[10,0,0,0],..Dump::default()});
@@ -1135,7 +1279,7 @@ mod test {
             RET,
         ];
         let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], None, printer.clone());
+        let mut device = Device::new(ops, vec![], vec![],vec![], printer.clone());
 
         assert_eq!(device.dump(), Dump::default());
         device.assert_mem(SP_MAX-1 , 0);

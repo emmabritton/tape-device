@@ -36,6 +36,8 @@ pub mod code {
     pub const SUB_REG_VAL: u8 = 0x04;
     pub const INC_REG: u8 = 0x05;
     pub const DEC_REG: u8 = 0x06;
+    pub const ADD_REG_AREG: u8 = 0x07;
+    pub const SUB_REG_AREG: u8 = 0x08;
 
     pub const CPY_REG_REG: u8 = 0x10;
     pub const CPY_REG_VAL: u8 = 0x11;
@@ -72,6 +74,13 @@ pub mod code {
     pub const MEMR_AREG: u8 = 0x41;
     pub const MEMW_ADDR: u8 = 0x42;
     pub const MEMW_AREG: u8 = 0x43;
+    pub const MEMC_AREG_AREG: u8 = 0x44;
+    pub const LD_AREG_DATA_REG_REG: u8 = 0x45;
+    pub const LD_AREG_DATA_REG_VAL: u8 = 0x46;
+    pub const LD_AREG_DATA_VAL_REG: u8 = 0x47;
+    pub const LD_AREG_DATA_VAL_VAL: u8 = 0x48;
+    pub const LEN_DATA_REG: u8 = 0x49;
+    pub const LEN_DATA_VAL: u8 = 0x4A;
 
     pub const CALL_ADDR: u8 = 0x70;
     pub const CALL_AREG: u8 = 0x71;
@@ -85,28 +94,55 @@ pub mod code {
     pub const PRT_REG: u8 = 0x90;
     pub const PRT_VAL: u8 = 0x91;
     pub const PRTLN: u8 = 0x92;
-    pub const PRTD_STR: u8 = 0x93;
+    pub const PRTS_STR: u8 = 0x93;
     pub const PRTC_REG: u8 = 0x94;
     pub const PRTC_VAL: u8 = 0x95;
-    pub const PSTR_ADDR: u8 = 0x96;
-    pub const PSTR_AREG: u8 = 0x97;
+    pub const MEMP_ADDR: u8 = 0x96;
+    pub const MEMP_AREG: u8 = 0x97;
+    pub const PRTD_AREG: u8 = 0x98;
+    pub const PRT_AREG: u8 = 0x99;
+    pub const PRTC_AREG: u8 = 0x9A;
 
-    pub const FOPEN: u8 = 0xC0;
-    pub const FILER_ADDR: u8 = 0xC1;
-    pub const FILER_AREG: u8 = 0xC2;
-    pub const FILEW_ADDR: u8 = 0xC3;
-    pub const FILEW_AREG: u8 = 0xC4;
-    pub const FSEEK: u8 = 0xC5;
-    pub const FSKIP_REG: u8 = 0xC6;
-    pub const FSKIP_VAL: u8 = 0xC7;
-    pub const FCHK_ADDR: u8 = 0xC8;
-    pub const FCHK_AREG: u8 = 0xC9;
+    pub const AND_REG_REG: u8 = 0xA0;
+    pub const AND_REG_VAL: u8 = 0xA1;
+    pub const OR_REG_REG: u8 = 0xA2;
+    pub const OR_REG_VAL: u8 = 0xA3;
+    pub const XOR_REG_REG: u8 = 0xA4;
+    pub const XOR_REG_VAL: u8 = 0xA5;
+    pub const NOT_REG: u8 = 0xA6;
+    pub const AND_REG_AREG: u8 = 0xA7;
+    pub const OR_REG_AREG: u8 = 0xA8;
+    pub const XOR_REG_AREG: u8 = 0xA9;
 
-    pub const IPOLL_ADDR: u8 = 0xD0;
-    pub const IPOLL_AREG: u8 = 0xD1;
-    pub const RCHR_REG: u8 = 0xD2;
-    pub const RSTR_ADDR: u8 = 0xD3;
-    pub const RSTR_AREG: u8 = 0xD4;
+    pub const FOPEN_REG: u8 = 0xC0;
+    pub const FILER_REG_ADDR: u8 = 0xC1;
+    pub const FILER_REG_AREG: u8 = 0xC2;
+    pub const FILEW_REG_ADDR: u8 = 0xC3;
+    pub const FILEW_REG_AREG: u8 = 0xC4;
+    pub const FSEEK_REG: u8 = 0xC5;
+    pub const FSKIP_REG_REG: u8 = 0xC6;
+    pub const FSKIP_REG_VAL: u8 = 0xC7;
+    pub const FCHK_REG_ADDR: u8 = 0xC8;
+    pub const FCHK_REG_AREG: u8 = 0xC9;
+    pub const FOPEN_VAL: u8 = 0xCA;
+    pub const FILER_VAL_ADDR: u8 = 0xCB;
+    pub const FILER_VAL_AREG: u8 = 0xCC;
+    pub const FILEW_VAL_ADDR: u8 = 0xCD;
+    pub const FILEW_VAL_AREG: u8 = 0xCE;
+    pub const FSEEK_VAL: u8 = 0xCF;
+    pub const FSKIP_VAL_REG: u8 = 0xD0;
+    pub const FSKIP_VAL_VAL: u8 = 0xD1;
+    pub const FCHK_VAL_ADDR: u8 = 0xD2;
+    pub const FCHK_VAL_AREG: u8 = 0xD3;
+
+    pub const IPOLL_ADDR: u8 = 0xE0;
+    pub const IPOLL_AREG: u8 = 0xE1;
+    pub const RCHR_REG: u8 = 0xE2;
+    pub const RSTR_ADDR: u8 = 0xE3;
+    pub const RSTR_AREG: u8 = 0xE4;
+    pub const RAND_REG: u8 = 0xE5;
+    pub const TIME: u8 = 0xE6;
+    pub const SEED_REG: u8 = 0xE7;
 
     pub const NOP: u8 = 0xFE;
     pub const HALT: u8 = 0xFF;
@@ -114,19 +150,37 @@ pub mod code {
 
 pub fn get_byte_count(opcode: u8) -> usize {
     match opcode {
-        FSEEK | PRTLN | FOPEN | RET | NOP | HALT => 1,
+        PRTLN | RET | NOP | HALT | TIME => 1,
         INC_REG | DEC_REG | JMP_AREG | JE_AREG | JNE_AREG | JL_AREG | JG_AREG | OVER_AREG
         | NOVER_AREG | MEMR_AREG | MEMW_AREG | CALL_AREG | PUSH_REG | PUSH_VAL | POP_REG
-        | PRT_REG | PRT_VAL | PRTC_REG | PRTC_VAL | FILER_AREG | FILEW_AREG | RCHR_REG => 2,
+        | PRT_REG | PRT_VAL | PRTC_REG | PRTC_VAL | RCHR_REG | RAND_REG | NOT_REG | SEED_REG
+        | FSEEK_REG | FSEEK_VAL | FOPEN_REG | FOPEN_VAL | PRTD_AREG | MEMP_AREG => 2,
         ADD_REG_REG | ADD_REG_VAL | SUB_REG_REG | SUB_REG_VAL | CPY_REG_REG | CPY_REG_VAL
         | SWP_AREG_AREG | SWP_REG_REG | JMP_ADDR | JE_ADDR | JNE_ADDR | JL_ADDR | JG_ADDR
         | OVER_ADDR | CMP_AREG_AREG | CPY_AREG_AREG | NOVER_ADDR | CMP_REG_REG | CMP_REG_VAL
-        | MEMR_ADDR | MEMW_ADDR | CALL_ADDR | PRTD_STR | FILER_ADDR | FILEW_ADDR | FSKIP_REG
-        | ARG_REG_VAL | ARG_REG_REG | PSTR_ADDR | PSTR_AREG | FCHK_ADDR | FCHK_AREG
-        | IPOLL_ADDR | IPOLL_AREG | RSTR_ADDR | RSTR_AREG => 3,
+        | MEMR_ADDR | MEMW_ADDR | CALL_ADDR | PRTS_STR | FSKIP_REG_REG | FSKIP_REG_VAL
+        | MEMC_AREG_AREG | FSKIP_VAL_REG | FSKIP_VAL_VAL | ARG_REG_VAL | ARG_REG_REG
+        | MEMP_ADDR | FILER_REG_AREG | FILER_VAL_AREG | FILEW_REG_AREG | FILEW_VAL_AREG
+        | IPOLL_ADDR | IPOLL_AREG | RSTR_ADDR | RSTR_AREG | AND_REG_VAL | AND_REG_REG
+        | AND_REG_AREG | OR_REG_AREG | XOR_REG_AREG | OR_REG_VAL | OR_REG_REG | XOR_REG_REG
+        | XOR_REG_VAL | FCHK_REG_AREG | FCHK_VAL_AREG | ADD_REG_AREG | SUB_REG_AREG => 3,
         CMP_AREG_ADDR | CPY_AREG_ADDR | CMP_AREG_REG_REG | CMP_REG_REG_AREG | CPY_REG_REG_AREG
-        | CPY_AREG_REG_REG => 4,
-        _ => panic!("Unknown opcode: {}", opcode),
+        | FCHK_REG_ADDR | FCHK_VAL_ADDR | CPY_AREG_REG_REG | FILER_REG_ADDR | FILEW_VAL_ADDR
+        | FILER_VAL_ADDR | FILEW_REG_ADDR => 4,
+        LD_AREG_DATA_REG_REG | LD_AREG_DATA_REG_VAL | LD_AREG_DATA_VAL_REG
+        | LD_AREG_DATA_VAL_VAL => 6,
+        _ => panic!("Unknown opcode: {:02X}", opcode),
+    }
+}
+
+pub fn get_addr_byte_offset(opcode: u8) -> usize {
+    match opcode {
+        JMP_ADDR | JMP_AREG | JE_ADDR | JE_AREG | JL_ADDR | JL_AREG | JNE_ADDR | JNE_AREG
+        | JG_ADDR | JG_AREG | OVER_ADDR | OVER_AREG | NOVER_ADDR | NOVER_AREG | CALL_ADDR
+        | CALL_AREG | RET | IPOLL_AREG | IPOLL_ADDR => 1,
+        FCHK_VAL_AREG | FCHK_VAL_ADDR | FCHK_REG_AREG | FCHK_REG_ADDR | LD_AREG_DATA_VAL_REG
+        | LD_AREG_DATA_REG_VAL | LD_AREG_DATA_VAL_VAL | LD_AREG_DATA_REG_REG => 2,
+        _ => panic!("Opcode {:02X} doesn't have any addr param", opcode),
     }
 }
 
@@ -150,89 +204,88 @@ pub fn is_jump_op(opcode: u8) -> bool {
             | CALL_ADDR
             | CALL_AREG
             | RET
-            | FCHK_AREG
-            | FCHK_ADDR
+            | FCHK_VAL_AREG
+            | FCHK_VAL_ADDR
+            | FCHK_REG_AREG
+            | FCHK_REG_ADDR
             | IPOLL_AREG
             | IPOLL_ADDR
     )
 }
 
+#[rustfmt::skip]
+pub const ALL_OPS: [u8; 100] = [
+    ADD_REG_REG, ADD_REG_VAL, ADD_REG_AREG,
+    SUB_REG_REG, SUB_REG_VAL, SUB_REG_AREG,
+    AND_REG_REG, AND_REG_VAL, AND_REG_AREG,
+    OR_REG_REG, OR_REG_VAL, OR_REG_AREG,
+    XOR_REG_REG, XOR_REG_VAL, XOR_REG_AREG,
+    INC_REG, DEC_REG,
+    CPY_REG_REG,
+    CPY_REG_VAL,
+    CPY_AREG_AREG,
+    CPY_AREG_ADDR,
+    CPY_AREG_REG_REG,
+    CPY_REG_REG_AREG,
+    CMP_AREG_AREG,
+    CMP_AREG_ADDR,
+    CMP_REG_REG_AREG,
+    CMP_REG_REG,
+    CMP_AREG_REG_REG,
+    CMP_REG_VAL,
+    JMP_ADDR, JMP_AREG,
+    JE_ADDR, JE_AREG,
+    JNE_ADDR, JNE_AREG,
+    JL_ADDR, JL_AREG,
+    JG_ADDR, JG_AREG,
+    OVER_ADDR, OVER_AREG,
+    NOVER_ADDR, NOVER_AREG,
+    MEMR_ADDR, MEMR_AREG,
+    MEMW_ADDR, MEMW_AREG,
+    CALL_ADDR, CALL_AREG,
+    RET,
+    PUSH_REG, PUSH_VAL,
+    POP_REG,
+    PRT_REG, PRT_VAL,
+    PRTLN,
+    PRTC_REG, PRTC_VAL,
+    FOPEN_REG,
+    FILER_REG_ADDR, FILER_REG_AREG,
+    FILEW_REG_ADDR, FILEW_REG_AREG,
+    FSEEK_REG,
+    FSKIP_REG_REG,
+    FCHK_REG_ADDR, FCHK_REG_AREG,
+    FOPEN_VAL,
+    FILER_VAL_ADDR, FILER_VAL_AREG,
+    FILEW_VAL_ADDR, FILEW_VAL_AREG,
+    FSEEK_VAL,
+    FSKIP_VAL_REG,
+    FCHK_VAL_ADDR, FCHK_VAL_AREG,
+    NOP,
+    HALT,
+    ARG_REG_VAL, ARG_REG_REG,
+    IPOLL_ADDR, IPOLL_AREG,
+    RCHR_REG,
+    RSTR_AREG, RSTR_ADDR,
+    SWP_REG_REG, SWP_AREG_AREG,
+    TIME,
+    RAND_REG,
+    SEED_REG,
+    NOT_REG,
+    LD_AREG_DATA_REG_REG,
+    LD_AREG_DATA_REG_VAL,
+    LD_AREG_DATA_VAL_REG,
+    LD_AREG_DATA_VAL_VAL,
+    MEMC_AREG_AREG,
+    MEMP_ADDR, MEMP_AREG,
+    PRTD_AREG,
+    PRTS_STR,
+];
+
 #[cfg(test)]
 mod tests {
-    use crate::constants::code::*;
-    use crate::constants::get_byte_count;
+    use super::*;
     use std::collections::HashSet;
-
-    const ALL_OPS: [u8; 68] = [
-        ADD_REG_REG,
-        ADD_REG_VAL,
-        SUB_REG_REG,
-        SUB_REG_VAL,
-        INC_REG,
-        DEC_REG,
-        CPY_REG_REG,
-        CPY_REG_VAL,
-        CPY_AREG_AREG,
-        CPY_AREG_ADDR,
-        CPY_AREG_REG_REG,
-        CPY_REG_REG_AREG,
-        CMP_AREG_AREG,
-        CMP_AREG_ADDR,
-        CMP_REG_REG_AREG,
-        CMP_REG_REG,
-        CMP_AREG_REG_REG,
-        CMP_REG_VAL,
-        JMP_ADDR,
-        JMP_AREG,
-        JE_ADDR,
-        JE_AREG,
-        JNE_ADDR,
-        JNE_AREG,
-        JL_ADDR,
-        JL_AREG,
-        JG_ADDR,
-        JG_AREG,
-        OVER_ADDR,
-        OVER_AREG,
-        NOVER_ADDR,
-        NOVER_AREG,
-        MEMR_ADDR,
-        MEMR_AREG,
-        MEMW_ADDR,
-        MEMW_AREG,
-        CALL_ADDR,
-        CALL_AREG,
-        RET,
-        PUSH_REG,
-        PUSH_VAL,
-        POP_REG,
-        PRT_REG,
-        PRT_VAL,
-        PRTLN,
-        PRTD_STR,
-        PRTC_REG,
-        PRTC_VAL,
-        FOPEN,
-        FILER_ADDR,
-        FILER_AREG,
-        FILEW_ADDR,
-        FILEW_AREG,
-        FSEEK,
-        FSKIP_REG,
-        NOP,
-        HALT,
-        ARG_REG_VAL,
-        ARG_REG_REG,
-        FCHK_ADDR,
-        FCHK_AREG,
-        IPOLL_ADDR,
-        IPOLL_AREG,
-        RCHR_REG,
-        RSTR_AREG,
-        RSTR_ADDR,
-        SWP_REG_REG,
-        SWP_AREG_AREG,
-    ];
 
     #[test]
     fn check_ops_are_unique() {
@@ -248,9 +301,15 @@ mod tests {
     #[test]
     fn check_ops_have_byte_counts() {
         for op in ALL_OPS.iter() {
-            let count = get_byte_count(*op);
-            if count > 3 {
-                panic!("Invalid byte count for {}: {}", op, count);
+            get_byte_count(*op);
+        }
+    }
+
+    #[test]
+    fn check_jump_ops_have_addr_offsets() {
+        for op in ALL_OPS.iter() {
+            if is_jump_op(*op) {
+                get_addr_byte_offset(*op);
             }
         }
     }

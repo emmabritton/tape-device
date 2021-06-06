@@ -1,6 +1,6 @@
 use crate::constants::code::*;
-use crate::constants::get_byte_count;
 use crate::constants::hardware::*;
+use crate::constants::{get_addr_byte_offset, get_byte_count};
 use crate::tape_reader::read_tape;
 use anyhow::Result;
 use std::collections::HashSet;
@@ -25,29 +25,6 @@ impl Decoded {
             byte_offset,
             is_jump_target,
         }
-    }
-}
-
-impl Decoded {
-    pub fn is_param_16_bit(&self) -> bool {
-        matches!(
-            self.bytes[0],
-            MEMR_ADDR
-                | MEMW_ADDR
-                | PRTD_STR
-                | FILER_ADDR
-                | FILEW_ADDR
-                | JMP_ADDR
-                | JE_ADDR
-                | JG_ADDR
-                | JNE_ADDR
-                | JL_ADDR
-                | OVER_ADDR
-                | NOVER_ADDR
-                | CALL_ADDR
-                | CPY_AREG_ADDR
-                | CMP_AREG_ADDR
-        )
     }
 }
 
@@ -85,8 +62,15 @@ pub fn start(path: &str) -> Result<()> {
             String::from("    ")
         };
         println!(
-            "{: <4}  {} {:<6}  {:<5}  {:<5}",
-            pc, lbl, op.strings[0], op.strings[1], op.strings[2]
+            "{: <4}  {} {:<6}  {}",
+            pc,
+            lbl,
+            op.strings[0],
+            op.strings[1..]
+                .iter()
+                .map(|value| format!("  {:<5}", value))
+                .collect::<Vec<String>>()
+                .join("")
         );
         pc += get_byte_count(op.bytes[0]);
     }
@@ -98,7 +82,7 @@ pub fn collect_strings(ops: &[u8], data: &[u8]) -> (Vec<String>, usize) {
     let mut op_idx = 0;
     let mut addresses = HashSet::new();
     while op_idx < ops.len() {
-        if ops[op_idx] == PRTD_STR {
+        if ops[op_idx] == PRTS_STR {
             let addr = u16::from_be_bytes([ops[op_idx + 1], ops[op_idx + 2]]);
             addresses.insert(addr);
         }
@@ -118,14 +102,31 @@ pub fn collect_strings(ops: &[u8], data: &[u8]) -> (Vec<String>, usize) {
 
 pub fn collect_jump_targets(ops: &[u8]) -> Vec<usize> {
     let mut jmp_target = vec![];
-    for op in ops.windows(3) {
+    let mut pc = 0;
+    loop {
+        if pc >= ops.len() {
+            break;
+        }
+        let op = ops[pc];
         if matches!(
-            op[0],
-            JMP_ADDR | JE_ADDR | JNE_ADDR | JL_ADDR | JG_ADDR | OVER_ADDR | NOVER_ADDR | CALL_ADDR
+            op,
+            JMP_ADDR
+                | JE_ADDR
+                | JNE_ADDR
+                | JL_ADDR
+                | JG_ADDR
+                | OVER_ADDR
+                | NOVER_ADDR
+                | CALL_ADDR
+                | FCHK_REG_ADDR
+                | FCHK_VAL_ADDR
+                | IPOLL_ADDR
         ) {
-            let addr = u16::from_be_bytes([op[1], op[2]]) as usize;
+            let offset = get_addr_byte_offset(op);
+            let addr = u16::from_be_bytes([ops[pc + offset], ops[pc + offset + 1]]) as usize;
             jmp_target.push(addr);
         }
+        pc += get_byte_count(op)
     }
     jmp_target
 }
@@ -145,6 +146,7 @@ pub fn decode(
     let (op_str, params): (&str, Vec<String>) = match op[0] {
         ADD_REG_VAL => ("ADD", vec![decode_reg(op[1]), decode_num(op[2])]),
         ADD_REG_REG => ("ADD", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        ADD_REG_AREG => ("ADD", vec![decode_reg(op[1]), decode_reg(op[2])]),
         CPY_REG_VAL => ("CPY", vec![decode_reg(op[1]), decode_num(op[2])]),
         CPY_REG_REG | CPY_AREG_AREG => ("CPY", vec![decode_reg(op[1]), decode_reg(op[2])]),
         CPY_AREG_ADDR => ("CPY", vec![decode_reg(op[1]), decode_addr(op[2], op[3])]),
@@ -161,25 +163,35 @@ pub fn decode(
         ),
         SUB_REG_VAL => ("SUB", vec![decode_reg(op[1]), decode_num(op[2])]),
         SUB_REG_REG => ("SUB", vec![decode_reg(op[1]), decode_reg(op[2])]),
-        FOPEN => ("FOPEN", vec![]),
+        SUB_REG_AREG => ("SUB", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        FOPEN_REG => ("FOPEN", vec![decode_reg(op[1])]),
+        FOPEN_VAL => ("FOPEN", vec![decode_num(op[1])]),
+        FSEEK_REG => ("FSEEK", vec![decode_reg(op[1])]),
+        FSEEK_VAL => ("FSEEK", vec![decode_num(op[1])]),
         PRTLN => ("PRTLN", vec![]),
         INC_REG => ("INC", vec![decode_reg(op[1])]),
         DEC_REG => ("DEC", vec![decode_reg(op[1])]),
-        FSKIP_REG => ("FSKIP", vec![decode_reg(op[1])]),
+        FSKIP_REG_REG => ("FSKIP", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        FSKIP_REG_VAL => ("FSKIP", vec![decode_reg(op[1]), decode_num(op[2])]),
+        FSKIP_VAL_REG => ("FSKIP", vec![decode_num(op[1]), decode_reg(op[2])]),
+        FSKIP_VAL_VAL => ("FSKIP", vec![decode_num(op[1]), decode_num(op[2])]),
         PRT_VAL => ("PRT", vec![decode_num(op[1])]),
         PRT_REG => ("PRT", vec![decode_reg(op[1])]),
         PRTC_VAL => ("PRTC", vec![decode_num(op[1])]),
         PRTC_REG => ("PRTC", vec![decode_reg(op[1])]),
-        FILER_ADDR => ("FILER", vec![decode_addr(op[1], op[2])]),
-        FILER_AREG => ("FILER", vec![decode_reg(op[1])]),
-        FILEW_ADDR => ("FILEW", vec![decode_addr(op[1], op[2])]),
-        FILEW_AREG => ("FILEW", vec![decode_reg(op[1])]),
-        FSEEK => ("FSEEK", vec![]),
+        FILER_REG_ADDR => ("FILER", vec![decode_reg(op[1]), decode_addr(op[2], op[3])]),
+        FILER_REG_AREG => ("FILER", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        FILEW_REG_ADDR => ("FILEW", vec![decode_reg(op[1]), decode_addr(op[2], op[3])]),
+        FILEW_REG_AREG => ("FILEW", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        FILER_VAL_ADDR => ("FILER", vec![decode_num(op[1]), decode_addr(op[2], op[3])]),
+        FILER_VAL_AREG => ("FILER", vec![decode_num(op[1]), decode_reg(op[2])]),
+        FILEW_VAL_ADDR => ("FILEW", vec![decode_num(op[1]), decode_addr(op[2], op[3])]),
+        FILEW_VAL_AREG => ("FILEW", vec![decode_num(op[1]), decode_reg(op[2])]),
         MEMR_ADDR => ("MEMR", vec![decode_addr(op[1], op[2])]),
         MEMR_AREG => ("MEMR", vec![decode_reg(op[1])]),
         MEMW_ADDR => ("MEMW", vec![decode_addr(op[1], op[2])]),
         MEMW_AREG => ("MEMW", vec![decode_reg(op[1])]),
-        PRTD_STR => ("PRTD", vec![decode_string(op[1], op[2], strings)]),
+        PRTS_STR => ("PRTD", vec![decode_string(op[1], op[2], strings)]),
         JMP_ADDR => ("JMP", vec![decode_addr(op[1], op[2])]),
         JE_ADDR => ("JE", vec![decode_addr(op[1], op[2])]),
         JNE_ADDR => ("JNE", vec![decode_addr(op[1], op[2])]),
@@ -205,15 +217,68 @@ pub fn decode(
         SWP_REG_REG | SWP_AREG_AREG => ("SWP", vec![decode_reg(op[1]), decode_reg(op[2])]),
         ARG_REG_VAL => ("ARG", vec![decode_reg(op[1]), decode_num(op[2])]),
         ARG_REG_REG => ("ARG", vec![decode_reg(op[1]), decode_reg(op[2])]),
-        FCHK_AREG => ("FCHK", vec![decode_reg(op[1])]),
-        FCHK_ADDR => ("FCHK", vec![decode_addr(op[1], op[2])]),
+        FCHK_REG_AREG => ("FCHK", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        FCHK_REG_ADDR => ("FCHK", vec![decode_reg(op[1]), decode_addr(op[2], op[3])]),
+        FCHK_VAL_AREG => ("FCHK", vec![decode_num(op[1]), decode_reg(op[2])]),
+        FCHK_VAL_ADDR => ("FCHK", vec![decode_num(op[1]), decode_addr(op[2], op[3])]),
         IPOLL_AREG => ("IPOLL", vec![decode_reg(op[1])]),
         IPOLL_ADDR => ("IPOLL", vec![decode_addr(op[1], op[2])]),
         RSTR_AREG => ("RSTR", vec![decode_reg(op[1])]),
         RSTR_ADDR => ("RSTR", vec![decode_addr(op[1], op[2])]),
-        PSTR_AREG => ("PSTR", vec![decode_reg(op[1])]),
-        PSTR_ADDR => ("PSTR", vec![decode_addr(op[1], op[2])]),
+        MEMP_AREG => ("PSTR", vec![decode_reg(op[1])]),
+        MEMP_ADDR => ("PSTR", vec![decode_addr(op[1], op[2])]),
         RCHR_REG => ("RCHR", vec![decode_reg(op[1])]),
+        MEMC_AREG_AREG => ("MEMC", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        AND_REG_REG => ("AND", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        AND_REG_VAL => ("AND", vec![decode_reg(op[1]), decode_num(op[2])]),
+        AND_REG_AREG => ("AND", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        OR_REG_REG => ("OR", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        OR_REG_VAL => ("OR", vec![decode_reg(op[1]), decode_num(op[2])]),
+        OR_REG_AREG => ("OR", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        XOR_REG_REG => ("XOR", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        XOR_REG_VAL => ("XOR", vec![decode_reg(op[1]), decode_num(op[2])]),
+        XOR_REG_AREG => ("XOR", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        TIME => ("TIME", vec![]),
+        NOT_REG => ("NOT", vec![decode_reg(op[1])]),
+        SEED_REG => ("SEED", vec![decode_reg(op[1])]),
+        RAND_REG => ("RAND", vec![decode_reg(op[1])]),
+        PRTD_AREG => ("PRTD", vec![decode_reg(op[1])]),
+        LD_AREG_DATA_REG_REG => (
+            "LD",
+            vec![
+                decode_reg(op[1]),
+                decode_addr(op[2], op[3]),
+                decode_reg(op[4]),
+                decode_reg(op[5]),
+            ],
+        ),
+        LD_AREG_DATA_REG_VAL => (
+            "LD",
+            vec![
+                decode_reg(op[1]),
+                decode_addr(op[2], op[3]),
+                decode_reg(op[4]),
+                decode_num(op[5]),
+            ],
+        ),
+        LD_AREG_DATA_VAL_REG => (
+            "LD",
+            vec![
+                decode_reg(op[1]),
+                decode_addr(op[2], op[3]),
+                decode_num(op[4]),
+                decode_reg(op[5]),
+            ],
+        ),
+        LD_AREG_DATA_VAL_VAL => (
+            "LD",
+            vec![
+                decode_reg(op[1]),
+                decode_addr(op[2], op[3]),
+                decode_num(op[4]),
+                decode_num(op[5]),
+            ],
+        ),
         _ => ("???", vec![]),
     };
     let mut strings = params;
@@ -253,5 +318,24 @@ fn decode_reg(reg: u8) -> String {
         REG_A0 => String::from("A0"),
         REG_A1 => String::from("A1"),
         _ => String::from("?"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::constants::ALL_OPS;
+
+    #[test]
+    fn check_decoding_all() {
+        for op in ALL_OPS.iter() {
+            let decoded = decode(&mut vec![*op, 0, 0, 0, 0, 0, 0], &[1, 115], 0, false);
+            assert_ne!(
+                decoded.strings[0],
+                String::from("???"),
+                "Missing decoded: {:02X}",
+                op
+            );
+        }
     }
 }

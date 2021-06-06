@@ -1,0 +1,16 @@
+Hangman
+1.0
+
+.strings
+welcome=Welcome to Hangman
+instructions=Try to guess a word by entering letters
+remaining=guesses left
+
+.ops
+const word a0
+const char a1
+
+start:  prtd welcome
+        prtln
+        prtd instructions
+

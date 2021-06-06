@@ -3,4 +3,4 @@ Hello World!
 .strings
 greeting=Hello World!
 .ops
-PRTD greeting
+PRTS greeting

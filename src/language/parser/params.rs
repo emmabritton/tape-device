@@ -6,24 +6,24 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Param {
-    Empty,
     Number(u8),
     DataReg(u8),
     AddrReg(u8),
     Addr(u16),
     Label(String),
     StrKey(String),
+    DataKey(String),
 }
 
 bitflags! {
     pub(super) struct Parameters: u32 {
-        const NONE = 0;
-        const NUMBER =  0b00000001;
-        const ADDRESS = 0b00000010;
-        const DATA_REG = 0b00000100;
-        const ADDR_REG = 0b00001000;
-        const LABEL =   0b00010000;
-        const STRING_KEY =  0b00100000;
+        const NUMBER =    0b00000001;
+        const ADDRESS =   0b00000010;
+        const DATA_REG =  0b00000100;
+        const ADDR_REG =  0b00001000;
+        const LABEL =     0b00010000;
+        const STRING_KEY =0b00100000;
+        const DATA_KEY =  0b01000000;
         const ADDRESSES = Self::LABEL.bits | Self::ADDRESS.bits;
         const REGISTERS = Self::DATA_REG.bits | Self::ADDR_REG.bits;
     }
@@ -35,6 +35,7 @@ impl Display for Parameters {
             Parameters::NUMBER => write!(f, "byte"),
             Parameters::ADDRESS => write!(f, "address"),
             Parameters::DATA_REG => write!(f, "data_reg"),
+            Parameters::DATA_KEY => write!(f, "data_key"),
             Parameters::ADDR_REG => write!(f, "addr_reg"),
             Parameters::LABEL => write!(f, "label"),
             Parameters::STRING_KEY => write!(f, "text_key"),
@@ -49,18 +50,12 @@ impl Parameters {
     pub(super) fn parse(&self, input: &str) -> Result<Param> {
         let input = strip_trailing_comment(input);
         match *self {
-            Parameters::NONE => {
-                if input.is_empty() {
-                    Ok(Param::Empty)
-                } else {
-                    Err(Error::msg(format!("Expected nothing, found {}", input)))
-                }
-            }
             Parameters::NUMBER => parse_number(input),
             Parameters::DATA_REG => parse_data_reg(input),
             Parameters::ADDR_REG => parse_addr_reg(input),
             Parameters::ADDRESS => parse_addr(input),
             Parameters::LABEL => Ok(Param::Label(input.to_string())),
+            Parameters::DATA_KEY => Ok(Param::DataKey(input.to_string())),
             Parameters::STRING_KEY => Ok(Param::StrKey(input.to_string())),
             Parameters::REGISTERS => {
                 let data = parse_data_reg(input);
@@ -119,6 +114,13 @@ fn parse_number(input: &str) -> Result<Param> {
     let num = if input.starts_with('x') {
         let hex = input.chars().skip(1).collect::<String>();
         u8::from_str_radix(&hex, 16)
+    } else if input.len() == 3 && input.starts_with('\'') && input.ends_with('\'') {
+        let chr = input.chars().skip(1).next().unwrap();
+        if chr.is_ascii() {
+            Ok(chr as u8)
+        } else {
+            return Err(Error::msg(format!("Invalid char: {}", input)));
+        }
     } else {
         input.parse::<u8>()
     };
@@ -197,6 +199,11 @@ mod tests {
         assert!(parse_number("x100").is_err());
         assert!(parse_number("x3e8").is_err());
         assert!(parse_number("xF001").is_err());
+        assert_eq!(parse_number("' '").unwrap(), Param::Number(32));
+        assert_eq!(parse_number("'s'").unwrap(), Param::Number(115));
+        assert_eq!(parse_number("'}'").unwrap(), Param::Number(125));
+        assert!(parse_number("'s '").is_err());
+        assert!(parse_number("''").is_err());
     }
 
     #[test]
@@ -215,11 +222,6 @@ mod tests {
         assert!(parse_data_reg("dec").is_err());
         assert!(parse_addr_reg("d0").is_err());
         assert!(parse_addr_reg("acc").is_err());
-    }
-
-    #[test]
-    fn test_empty_parameter_parsing() {
-        assert_eq!(Parameters::NONE.parse("").unwrap(), Param::Empty);
     }
 
     #[test]
@@ -258,6 +260,14 @@ mod tests {
         assert_eq!(
             Parameters::LABEL.parse("start").unwrap(),
             Param::Label(String::from("start"))
+        );
+    }
+
+    #[test]
+    fn test_data_key_parameter_parsing() {
+        assert_eq!(
+            Parameters::DATA_KEY.parse("start").unwrap(),
+            Param::DataKey(String::from("start"))
         );
     }
 

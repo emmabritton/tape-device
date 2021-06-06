@@ -6,7 +6,6 @@ dots_1=Printing
 dots_2=dots twice
 dot=.
 .ops
-const space 32
 
 		push 1
 		push 2
@@ -14,7 +13,7 @@ const space 32
 		push 4
 	   	push 5
 		cpy d0 5
-		prtd first
+		prts first
 		prtln
 loop:	pop d3				#This prints 54321
 		prt d3			    #as stack is LIFO
@@ -27,20 +26,21 @@ next: 	prtln
 		push 6  			#push to stack, never used
 		push 2				#push to stack, used by dot_printer
 		call dots
-		pop acc 			#throw away param as used
+		pop acc 			#throw away param (2) as used
+		pop acc 			#throw away param (6) as used
 		push 3				#push to stack, used by dot_printer
 		call dots
-		pop acc				#throw away param as used
+		pop acc				#throw away param (3) as used
 		halt
 
 dots:   arg d3 1            #get param from stack (doesn't move SP or FP)
 
 		prtln 				#
-		prtd dots_1         #
-		prtc space          #print something like
+		prts dots_1         #
+		prtc ' '            #print something like
 		prt d3			    #Printing 2 dots
-		prtc space			#
-		prtd dots_2			#
+		prtc ' '			#
+		prts dots_2			#
 		prtln				#
 
 		add d3 d3
@@ -52,7 +52,7 @@ dots:   arg d3 1            #get param from stack (doesn't move SP or FP)
 
 inner:  arg d3 1			#get param from stack
 iloop:	dec d3
-		prtd dot
+		prts dot
 		cmp d3 0
 		jne iloop
 		ret

@@ -20,15 +20,15 @@ const step2 5
 
 start:			INC idx
 				PRT idx
-				PRTD colon
+				PRTS colon
 				CALL check_fizz
             	CALL check_buzz
             	CMP result1 pass
 				JNE buzzer
-				PRTD fizz
+				PRTS fizz
 buzzer:			CMP result2 pass
 				JNE new_line
-				PRTD buzz
+				PRTS buzz
 new_line:		PRTLN
 				CMP idx max
 				JL start

@@ -230,7 +230,7 @@ impl DataParser {
                 ValueMode::Number => self.finish_num(chr_idx)?,
                 ValueMode::Hex => self.finish_hex(chr_idx)?,
                 ValueMode::Char => {
-                    if self.current_content == String::from("'") {
+                    if self.current_content == *"'" {
                         self.current_content.push(',')
                     } else {
                         self.finish_char(chr_idx)?;

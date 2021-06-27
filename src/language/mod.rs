@@ -22,7 +22,7 @@ pub fn parse_line(input: &str) -> Result<(u8, Vec<Param>)> {
         .collect::<Vec<&str>>();
 
     for op in OPS.iter() {
-        if op.matches(&parts[0]) {
+        if op.matches(parts[0]) {
             let result = if parts.len() > 1 {
                 op.parse(&parts[1..])
             } else {

@@ -21,13 +21,11 @@ pub(super) fn compile_strings(lines: &mut Vec<String>) -> Result<(HashMap<String
                     line
                 )));
             }
-            if content.starts_with('"') && content.ends_with('"') {
-                if content.len() > 2 {
-                    let mut chars = content.chars();
-                    chars.next();
-                    chars.next_back();
-                    content = chars.collect();
-                }
+            if content.starts_with('"') && content.ends_with('"') && content.len() > 2 {
+                let mut chars = content.chars();
+                chars.next();
+                chars.next_back();
+                content = chars.collect();
             }
             let key = key.trim();
             if key

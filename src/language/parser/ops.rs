@@ -23,7 +23,7 @@ impl Op {
 
     pub fn parse(&self, parts: &[&str]) -> Option<(u8, Vec<Param>)> {
         for variant in self.variants.iter() {
-            if let Ok(params) = variant.parse(&parts) {
+            if let Ok(params) = variant.parse(parts) {
                 return Some((variant.opcode, params));
             }
         }

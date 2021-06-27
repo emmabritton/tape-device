@@ -2,19 +2,32 @@ use crate::assembler::FORMAT_ERROR;
 use anyhow::{Error, Result};
 use std::collections::HashMap;
 
-pub(super) fn compile_strings(
-    lines: &mut Vec<String>,
-    keep_whitespace: bool,
-) -> Result<(HashMap<String, u16>, Vec<u8>)> {
+pub(super) fn compile_strings(lines: &mut Vec<String>) -> Result<(HashMap<String, u16>, Vec<u8>)> {
     let mut mapping = HashMap::with_capacity(lines.len());
     let mut output = Vec::with_capacity(lines.len() * 10);
     let mut line = lines.remove(0);
     while line != ".ops" && line != ".data" {
         if let Some(idx) = line.find('=') {
             let (key, content) = line.split_at(idx);
-            let mut content: String = content.chars().skip(1).collect();
-            if !keep_whitespace {
-                content = content.trim().to_string();
+            let mut content = content
+                .chars()
+                .skip(1)
+                .collect::<String>()
+                .trim()
+                .to_owned();
+            if content.is_empty() {
+                return Err(Error::msg(format!(
+                    "String on line '{}' has no content, it must be defined as <key>=<content>, e.g. greeting=Hello world",
+                    line
+                )));
+            }
+            if content.starts_with('"') && content.ends_with('"') {
+                if content.len() > 2 {
+                    let mut chars = content.chars();
+                    chars.next();
+                    chars.next_back();
+                    content = chars.collect();
+                }
             }
             let key = key.trim();
             if key
@@ -27,7 +40,10 @@ pub(super) fn compile_strings(
                 )));
             }
             if content.len() > 255 {
-                return Err(Error::msg(format!("Line '{}' in strings is too long, must be at most 255 chars (including whitespace if --keep_whitespace)", line)));
+                return Err(Error::msg(format!(
+                    "Line '{}' in strings is too long, must be at most 255 chars",
+                    line
+                )));
             }
             if output.len() >= u16::MAX as usize {
                 return Err(Error::msg(format!("Too many strings at '{}', max of {} chars in strings data including whitespace but not including keys", line, u16::MAX - 1)));
@@ -74,12 +90,10 @@ mod tests {
             String::from("checking=bytes"),
             String::from(".ops"),
         ];
-        let result = compile_strings(&mut input, false);
+        let result = compile_strings(&mut input);
         assert!(input.is_empty());
         assert!(result.is_ok());
         let result = result.unwrap();
-        //Keys and values are sorted as otherwise they are in random order
-        //So just checking the expected values are somewhere
         let keys = result.0.keys().collect::<Vec<&String>>();
         let values = result.0.values().collect::<Vec<&u16>>();
         assert!(keys.contains(&&String::from("simple")));
@@ -92,52 +106,36 @@ mod tests {
     #[test]
     fn test_whitespace() {
         let mut input = vec![
-            String::from("no=whitespace"),
-            String::from("some=  before"),
-            String::from("and=after  "),
-            String::from("also=  both  "),
-            String::from(" keyb=ws"),
-            String::from("keya =ws"),
+            String::from("nows1=  before"),
+            String::from("nows2=  before  "),
+            String::from("nows3=before  "),
+            String::from("ws1=\"  before\""),
+            String::from("ws2=\"  before  \""),
+            String::from("ws3=\"before  \""),
             String::from(".ops"),
         ];
         let mut input2 = input.clone();
-        let result_no = compile_strings(&mut input, false);
-        let result_ws = compile_strings(&mut input2, true);
-        assert!(result_no.is_ok());
-        assert!(result_ws.is_ok());
-        let result_no = result_no.unwrap();
-        let result_ws = result_ws.unwrap();
-        let keys_ws = result_ws.0.keys().collect::<Vec<&String>>();
-        let keys_no = result_no.0.keys().collect::<Vec<&String>>();
-        let bytes_ws = result_ws.1;
-        let bytes_no = result_no.1;
-        assert!(keys_no.contains(&&String::from("no")));
-        assert!(keys_no.contains(&&String::from("some")));
-        assert!(keys_no.contains(&&String::from("and")));
-        assert!(keys_no.contains(&&String::from("also")));
-        assert!(keys_no.contains(&&String::from("keya")));
-        assert!(keys_no.contains(&&String::from("keyb")));
-        assert!(keys_ws.contains(&&String::from("no")));
-        assert!(keys_ws.contains(&&String::from("some")));
-        assert!(keys_ws.contains(&&String::from("and")));
-        assert!(keys_ws.contains(&&String::from("also")));
-        assert!(keys_ws.contains(&&String::from("keya")));
-        assert!(keys_ws.contains(&&String::from("keyb")));
+        let result = compile_strings(&mut input);
+        assert!(input.is_empty());
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        let keys = result.0.keys().collect::<Vec<&String>>();
+        let values = result.0.values().collect::<Vec<&u16>>();
+        assert_eq!(keys.len(), values.len());
+        assert!(keys.contains(&&String::from("nows1")));
+        assert!(keys.contains(&&String::from("nows2")));
+        assert!(keys.contains(&&String::from("nows3")));
+        assert!(keys.contains(&&String::from("ws1")));
+        assert!(keys.contains(&&String::from("ws2")));
+        assert!(keys.contains(&&String::from("ws3")));
         assert_eq!(
-            bytes_no,
+            result.1,
             [
-                10, 119, 104, 105, 116, 101, 115, 112, 97, 99, 101, 6, 98, 101, 102, 111, 114, 101,
-                5, 97, 102, 116, 101, 114, 4, 98, 111, 116, 104, 2, 119, 115, 2, 119, 115
+                6, 98, 101, 102, 111, 114, 101, 6, 98, 101, 102, 111, 114, 101, 6, 98, 101, 102,
+                111, 114, 101, 6, 32, 32, 98, 101, 102, 111, 114, 101, 6, 98, 101, 102, 111, 114,
+                101, 32, 32, 6, 32, 32, 98, 101, 102, 111, 114, 101, 32, 32
             ]
-        );
-        assert_eq!(
-            bytes_ws,
-            [
-                10, 119, 104, 105, 116, 101, 115, 112, 97, 99, 101, 8, 32, 32, 98, 101, 102, 111,
-                114, 101, 7, 97, 102, 116, 101, 114, 32, 32, 8, 32, 32, 98, 111, 116, 104, 32, 32,
-                2, 119, 115, 2, 119, 115
-            ]
-        );
+        )
     }
 
     #[test]
@@ -148,7 +146,7 @@ mod tests {
             String::from("of=output"),
             String::from(".ops"),
         ];
-        let result = compile_strings(&mut input, false);
+        let result = compile_strings(&mut input);
         assert!(input.is_empty());
         assert!(result.is_ok());
         let result = result.unwrap();
@@ -173,7 +171,7 @@ mod tests {
             String::from(".ops"),
             String::from("INC D0"),
         ];
-        let result = compile_strings(&mut input, false);
+        let result = compile_strings(&mut input);
         assert_eq!(input.len(), 1);
         assert_eq!(input[0], String::from("INC D0"));
         assert!(result.is_ok());
@@ -193,7 +191,7 @@ mod tests {
             String::from(".data"),
             String::from("key=[[0]]"),
         ];
-        let result = compile_strings(&mut input, false);
+        let result = compile_strings(&mut input);
         assert_eq!(input.len(), 2);
         assert_eq!(input[0], String::from(".data"));
         assert_eq!(input[1], String::from("key=[[0]]"));
@@ -210,7 +208,7 @@ mod tests {
     #[test]
     fn test_just_ops_marker() {
         let mut input = vec![String::from(".ops")];
-        let result = compile_strings(&mut input, false);
+        let result = compile_strings(&mut input);
         assert!(input.is_empty());
         assert!(result.is_ok());
         let result = result.unwrap();
@@ -221,7 +219,7 @@ mod tests {
     #[test]
     fn test_no_ops_marker() {
         let mut input = vec![String::from("a=string")];
-        assert!(compile_strings(&mut input, false).is_err());
+        assert!(compile_strings(&mut input).is_err());
         assert!(input.is_empty());
     }
 }

@@ -115,7 +115,7 @@ fn parse_number(input: &str) -> Result<Param> {
         let hex = input.chars().skip(1).collect::<String>();
         u8::from_str_radix(&hex, 16)
     } else if input.len() == 3 && input.starts_with('\'') && input.ends_with('\'') {
-        let chr = input.chars().skip(1).next().unwrap();
+        let chr = input.chars().nth(1).unwrap();
         if chr.is_ascii() {
             Ok(chr as u8)
         } else {

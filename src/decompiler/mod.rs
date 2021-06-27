@@ -37,25 +37,32 @@ pub fn start(path: &str) -> Result<()> {
         "\n\nProgram\nName: {}\nVersion: {}",
         tape.name, tape.version
     );
-    let (strings, unused) = collect_strings(&tape.ops, &tape.data);
+    let (strings, strings_unused) = collect_strings(&tape.ops, &tape.strings);
+    let (data, data_unused) = collect_data(&tape.ops, &tape.data);
 
     println!(
-        "{}b ops, {}b data ({}b unused or possibly indirectly referenced)",
+        "{}b ops, {}b strings ({}b unused), {}b data  ({}b unused)",
         tape.ops.len(),
+        tape.strings.len(),
+        strings_unused,
         tape.data.len(),
-        unused
+        data_unused,
     );
     println!("\n\nStrings:");
     for content in &strings {
         println!("\"{}\"", content);
     }
+    println!("\n\nData:");
+    for content in &data {
+        println!("{}", content);
+    }
     println!("\n\nOps:");
     let jmp_target = collect_jump_targets(&tape.ops);
 
     let mut pc = 0;
-    println!("byte  addr op      param1 param2");
+    println!("byte  addr op        param1 param2");
     while !tape.ops.is_empty() {
-        let op = decode(&mut tape.ops, &tape.data, pc, jmp_target.contains(&pc));
+        let op = decode(&mut tape.ops, &tape.strings, pc, jmp_target.contains(&pc));
         let lbl = if op.is_jump_target {
             format!("{:04X}", op.byte_offset)
         } else {
@@ -76,6 +83,39 @@ pub fn start(path: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub fn collect_data(ops: &[u8], data: &[u8]) -> (Vec<String>, usize) {
+    let mut data = data.to_vec();
+    let mut output = vec![];
+    loop {
+        if data.is_empty() {
+            break;
+        }
+
+        let sub_array_count = data.remove(0);
+        let mut sub_array_lens = vec![];
+        let mut sub_array_content = vec![];
+        for _ in 0..sub_array_count {
+            sub_array_lens.push(data.remove(0));
+        }
+        for len in sub_array_lens {
+            let mut content = vec![];
+            for _ in 0..len {
+                content.push(data.remove(0));
+            }
+            sub_array_content.push(content);
+        }
+
+        output.push(
+            sub_array_content
+                .iter()
+                .map(|arr| format!("{:?}", arr))
+                .collect::<Vec<String>>()
+                .join("  "),
+        );
+    }
+    (output, 0)
 }
 
 pub fn collect_strings(ops: &[u8], data: &[u8]) -> (Vec<String>, usize) {
@@ -148,14 +188,18 @@ pub fn decode(
         ADD_REG_REG => ("ADD", vec![decode_reg(op[1]), decode_reg(op[2])]),
         ADD_REG_AREG => ("ADD", vec![decode_reg(op[1]), decode_reg(op[2])]),
         CPY_REG_VAL => ("CPY", vec![decode_reg(op[1]), decode_num(op[2])]),
-        CPY_REG_REG | CPY_AREG_AREG => ("CPY", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        CPY_REG_REG | CPY_AREG_AREG | CPY_REG_AREG => {
+            ("CPY", vec![decode_reg(op[1]), decode_reg(op[2])])
+        }
         CPY_AREG_ADDR => ("CPY", vec![decode_reg(op[1]), decode_addr(op[2], op[3])]),
         CPY_REG_REG_AREG | CPY_AREG_REG_REG => (
             "CPY",
             vec![decode_reg(op[1]), decode_reg(op[2]), decode_reg(op[3])],
         ),
         CMP_REG_VAL => ("CMP", vec![decode_reg(op[1]), decode_num(op[2])]),
-        CMP_REG_REG | CMP_AREG_AREG => ("CMP", vec![decode_reg(op[1]), decode_reg(op[2])]),
+        CMP_REG_REG | CMP_AREG_AREG | CMP_REG_AREG => {
+            ("CMP", vec![decode_reg(op[1]), decode_reg(op[2])])
+        }
         CMP_AREG_ADDR => ("CMP", vec![decode_reg(op[1]), decode_addr(op[2], op[3])]),
         CMP_REG_REG_AREG | CMP_AREG_REG_REG => (
             "CMP",
@@ -176,8 +220,8 @@ pub fn decode(
         FSKIP_VAL_REG => ("FSKIP", vec![decode_num(op[1]), decode_reg(op[2])]),
         FSKIP_VAL_VAL => ("FSKIP", vec![decode_num(op[1]), decode_num(op[2])]),
         PRT_VAL => ("PRT", vec![decode_num(op[1])]),
-        PRT_REG => ("PRT", vec![decode_reg(op[1])]),
-        PRTC_VAL => ("PRTC", vec![decode_num(op[1])]),
+        PRT_REG | PRT_AREG => ("PRT", vec![decode_reg(op[1])]),
+        PRTC_VAL | PRTC_AREG => ("PRTC", vec![decode_num(op[1])]),
         PRTC_REG => ("PRTC", vec![decode_reg(op[1])]),
         FILER_REG_ADDR => ("FILER", vec![decode_reg(op[1]), decode_addr(op[2], op[3])]),
         FILER_REG_AREG => ("FILER", vec![decode_reg(op[1]), decode_reg(op[2])]),
@@ -191,7 +235,7 @@ pub fn decode(
         MEMR_AREG => ("MEMR", vec![decode_reg(op[1])]),
         MEMW_ADDR => ("MEMW", vec![decode_addr(op[1], op[2])]),
         MEMW_AREG => ("MEMW", vec![decode_reg(op[1])]),
-        PRTS_STR => ("PRTD", vec![decode_string(op[1], op[2], strings)]),
+        PRTS_STR => ("PRTS", vec![decode_string(op[1], op[2], strings)]),
         JMP_ADDR => ("JMP", vec![decode_addr(op[1], op[2])]),
         JE_ADDR => ("JE", vec![decode_addr(op[1], op[2])]),
         JNE_ADDR => ("JNE", vec![decode_addr(op[1], op[2])]),

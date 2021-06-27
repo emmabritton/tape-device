@@ -31,7 +31,7 @@ prt acc
 
 Results in `Answer:7`
 
-> :warning: The whole tape file is limited to 65535 bytes. This includes ops, strings, and data.
+> :warning: Each section is limited to 65535 bytes
 
 #### Comments
 
@@ -53,11 +53,25 @@ example=This is a string.
 prtd example
 ```
 
+The strings are trimmed, to include whitespace place the string double quotes:
+```asm
+spaced="  this line has 2 two spaces either side  "
+```
+
+This will print without the quotes, if you want quotes in the string use two quotes:
+```asm
+a_quote=""Sphinx of black quartz, judge my vow""
+```
+
+This will print with one quote on either side.
+
+Comments are be treated as part of the string
+
 The strings can't be indexed or accessed in any other way
 
 ### Data
 
-The tape file can include byte arrays of data. Each data line must be an array of arrays and must be a max of 255 per sub array and 255 sub arrays. The input can be bytes, characters or strings (that will be converted to a byte array):
+The tape file can include byte arrays of data. Each data line must be an array of arrays and must be a max of 255 per sub array and 254 sub arrays. The input can be bytes, characters or strings (that will be converted to a byte array):
 ```asm
 .data
 squares=[[1,4,9,25,36]]
@@ -65,41 +79,13 @@ hex=[[x45,xFF]]
 text=["str1", "str2", "str3"] # this is actually [[115, 116, 114, 49], [115...
 letters=["abcdef"]
 .ops
-ld a0 squares 0 0 #squares[0][0]
-prt a0
-ld a0 squares 0 2 #squares[0][2]
-prt a0
-prtln
-ld a0 text 0 0 #text[0][0]
-prtc a0
-ld a0 text 0 0 #text[0][1]
-prtc a0
-prtln
-ld a0 text 0 0 #text[0][0]
-prt a0
-prtln
-cpy acc 6
-ld a1 letters 0 0 
-pstr a1
-ld a0 squares 0 4
-cpy acc a0
-inc acc
-prt acc
 ```
 
-Outputs
-```
-19
-st
-115
-abcdef
-37
-```
+See `LD` for more information
 
 ## Assembly
 
-* Mnemonics and registers are case insensitive
-* Device is big endian
+* Mnemonics, keywords and registers (but not section dividers) are case insensitive
 
 #### Params 
 
@@ -176,10 +162,35 @@ Copy `ACC` bytes from 1st param in data to 2nd param in memory
 
 Load 1st param with address of byte(4th param) of array(3rd param) of data(2nd param)
 
-`LEN data_key data_reg|num`
+Memory is packaged as such:
 
-Load `ACC` with length of array(2nd param) of data(1st param)
+`<array count> <array1 length> <array2 length> <array1 bytes> <array2 bytes>`
 
+This allows length to be retrieved like this:
+
+```asm
+.data
+list=[[10,11],[97,98,99]]
+.ops
+LD ACC lists 0 0
+```
+
+Packaged: `02 02 03 0A 0B 61 62 63`
+
+| offset 1 | offset 2 | desc | value |
+|----------|----------|-------|-----|
+| 0 | 0 | array count | 2 |
+| 0 | 1 | length of array 1 | 2 |
+| 0 | 2 | length of array 2 | 3 |
+| 0 | 3+ | invalid | err |
+| 1 | 0 | byte 1 of array 1 | 10 |
+| 1 | 1 | byte 2 of array 1 | 10 |
+| 1 | 2+ | invalid | err |
+| 2 | 0 | byte 1 of array 2 | 99 |
+| 2 | 1 | byte 2 of array 2 | 99 |
+| 2 | 2 | byte 3 of array 2 | 99 |
+| 2 | 3+ | invalid | err |
+| 3+ | * | invalid | err |
 
 ### Printing
 
@@ -316,7 +327,7 @@ To get first call `ARG <reg> 1`, if the first param 1 byte then the second param
 
 This instruction does not alter data on the stack or move the SP or FP.
 
-*See stack example for more info*
+*See stack_example.basm for more info*
 
 ### Input
 
@@ -354,3 +365,7 @@ Set the rng seed
 `TIME`
 
 Populates `D0` with seconds, `D1` with minutes, `D2` with hours
+
+`DEBUG`
+
+Prints system dump, similar to system crash

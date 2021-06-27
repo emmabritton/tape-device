@@ -1,12 +1,11 @@
 # Tape Device
 
-Language (vm, compiler, decompiler) for fictional computer that executes programs optionally with input data.
+Language (vm, assembler, and decompiler) for fictional computer that executes programs optionally with input data.
 
 ### Device
 
-- Registers: 
-  - Special: ACC (Accumulator)
-  - 8 bit: D0, D1, D2, D3
+- Registers:
+  - 8 bit: D0, D1, D2, D3, ACC (Accumulator)
   - 16 bit: A0, A1
   - Internal (not directly accessible):
     - FP: Frame pointer
@@ -14,7 +13,9 @@ Language (vm, compiler, decompiler) for fictional computer that executes program
     - Overflow: Overflow flag
     - PC: Program counter
 - RAM: 65,535 bytes
-- Max program length: 65,535 bytes (includes data and strings)
+- Max ops length: 65,535 bytes 
+- Max strings length: 65,535 bytes (max 255 bytes per string)
+- Max data length: 65,535 bytes (max 254 sub arrays per data definition, max 255 bytes per sub array)
 
 ## Info
 
@@ -46,3 +47,17 @@ tape-device assemble program.basm
 ```
 tape-device decompile program.tape
 ```
+
+## TODO
+
+- [ ] change assembler to produce intermeadiate stage that represents how the compiler is interpreting the program for user to debug build issues
+    - [ ] the output should be usable by a debugger to use to identify source lines, etc
+    - [ ] the output should be presisted if required
+    - [ ] build errors should be improved to include source line, interpretation and more detailed error (and suggestion if possible)
+- [ ] gui debugger
+    - [ ] register dump
+    - [ ] breakpoints
+    - [ ] step-by-step
+    - [ ] data viewer
+    - [ ] memory viewer
+    - [ ] code insertion/editing?

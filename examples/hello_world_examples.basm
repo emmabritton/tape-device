@@ -9,7 +9,10 @@ ex_string=This is from a string in the .strings section:
 greeting=Hello, World!
 ex_mem=This is from data loaded into memory and read back out as chars:
 ex_file=This is from data loaded from a file and read out as chars:
-file_error=No input file, check note at top of tasm file
+file_error=No input file, check note at top of basm file
+ex_data=This is from data prepackaged in the tape file
+.data
+data_hello=["Hello from data"]
 .ops
         fchk 0 prog
         prtln
@@ -90,3 +93,11 @@ fprint: memr a0            #read value from memory at address in A0 and set in A
         jne fprint         #if they were not equal jump to fprint
         PRTLN              #newline
 
+        #Print from data
+        prts ex_data          #print string named ex_data
+        PRTLN              #newline
+        ld a0 data_hello 0 1  #set A0 to array length of first array
+        cpy acc a0            #load array length into acc
+        ld a0 data_hello 1 0  #set A0 to first byte of first arryy
+        prtd a0               #print ACC characters starting at data address in A0
+        PRTLN              #newline

@@ -2,26 +2,31 @@ use crate::constants::code::*;
 use crate::language::parser::ops::Op;
 use lazy_static::lazy_static;
 
+//To add new operation the following files must be updated:
+//language/ops.rs
+//constants.rs
+//assembler/program_model.rs
+//decompiler/mod.rs
+//device/internal.rs
+//language.md
+
 lazy_static! {
     pub static ref OPS: [Op; 48] = [
-        //CPY reg reg, reg val, areg areg, areg label|addr, areg reg reg, reg reg areg
+        //CPY reg reg, reg val, areg areg, areg label|addr, areg reg reg, reg reg areg, reg areg
         //Copy value from 2nd param to 1st
-        Op::new_reg_complex("CPY", CPY_REG_REG, CPY_REG_VAL, CPY_AREG_AREG, CPY_AREG_ADDR, CPY_AREG_REG_REG, CPY_REG_REG_AREG),
+        Op::new_reg_complex("CPY", CPY_REG_REG, CPY_REG_VAL, CPY_AREG_AREG, CPY_AREG_ADDR, CPY_AREG_REG_REG, CPY_REG_REG_AREG, CPY_REG_AREG),
         //ADD reg reg|val|addr_reg
         //Add 1st and 2nd params and store in ACC (addr_reg must point to data)
         Op::new_reg_val("ADD", ADD_REG_REG, ADD_REG_VAL, ADD_REG_AREG),
         //ADD reg reg|val|addr_reg
         //Subtract 2nd param from 1st and store in ACC (addr_reg must point to data)
         Op::new_reg_val("SUB", SUB_REG_REG, SUB_REG_VAL, SUB_REG_AREG),
-        //CMP reg reg, reg val, areg areg, areg label|addr, areg reg reg, reg reg areg
+        //CMP reg reg, reg val, areg areg, areg label|addr, areg reg reg, reg reg areg, reg areg
         //Compare values in 1st and 2nd params, store result in ACC (0 = Equal, 1 = Lesser, 2 = Greater)
-        Op::new_reg_complex("CMP", CMP_REG_REG, CMP_REG_VAL, CMP_AREG_AREG, CMP_AREG_ADDR, CMP_AREG_REG_REG, CMP_REG_REG_AREG),
+        Op::new_reg_complex("CMP", CMP_REG_REG, CMP_REG_VAL, CMP_AREG_AREG, CMP_AREG_ADDR, CMP_AREG_REG_REG, CMP_REG_REG_AREG, CMP_REG_AREG),
         //LD areg data_key (reg reg, reg val, val reg, val val)
         //Load address of indexed data (params 2 to 4) into 1st param
         Op::new_data("LD", LD_AREG_DATA_REG_REG, LD_AREG_DATA_REG_VAL, LD_AREG_DATA_VAL_REG, LD_AREG_DATA_VAL_VAL),
-        //LEN data_key reg|val
-        //Load length of indexed array (params 1 to 2) into ACC
-        Op::new_data_regval("LEN", LEN_DATA_REG, LEN_DATA_VAL),
         //JMP addr|lbl|addr_reg
         //Jump to instruction at 1st param
         Op::new_jmp("JMP", JMP_ADDR, JMP_AREG),
@@ -148,5 +153,8 @@ lazy_static! {
         //NOT reg|addr_reg
         //not bits of 1st param (addr_reg must point to data)
         Op::new_single_reg("NOT", NOT_REG),
+        //DEBUG
+        //Prints dump from system
+        Op::new_none("DEBUG", DEBUG),
     ];
 }

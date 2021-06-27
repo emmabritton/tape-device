@@ -1,8 +1,8 @@
-mod data;
+mod data_parser;
 mod program;
 mod strings;
 
-use crate::assembler::data::compile_data;
+use crate::assembler::data_parser::compile_data;
 use crate::assembler::program::assemble;
 use crate::assembler::strings::compile_strings;
 use crate::common::{clean_up_lines, read_lines, reset_cursor};
@@ -37,7 +37,7 @@ greeting=Hello World!
 See language document for ops and data
 "#;
 
-pub fn start(basm: &str, keep_whitespace: bool) -> Result<()> {
+pub fn start(basm: &str) -> Result<()> {
     let path = PathBuf::from(basm);
     let output_file_name = if let Some(output_file_stem) = path.file_stem() {
         format!("{}.tape", output_file_stem.to_string_lossy())
@@ -60,7 +60,7 @@ pub fn start(basm: &str, keep_whitespace: bool) -> Result<()> {
 
     let (strings_data, string_bytes) = if lines[0].trim() == ".strings" {
         lines.remove(0);
-        compile_strings(&mut lines, keep_whitespace)?
+        compile_strings(&mut lines)?
     } else {
         (HashMap::new(), vec![])
     };
@@ -97,13 +97,13 @@ pub fn start(basm: &str, keep_whitespace: bool) -> Result<()> {
     header.push(bytes[0]);
     header.push(bytes[1]);
 
-    for byte in header.iter().rev() {
-        program.insert(0, *byte);
+    for byte in header.into_iter().rev() {
+        program.insert(0, byte);
     }
 
     let strings_len = (string_bytes.len() as u16).to_be_bytes();
-    header.push(strings_len[0]);
-    header.push(strings_len[1]);
+    program.push(strings_len[0]);
+    program.push(strings_len[1]);
     program.extend_from_slice(&string_bytes);
 
     program.extend_from_slice(&data_bytes);

@@ -245,6 +245,7 @@ impl Op {
         opcode_areg_addr: u8,
         opcode_areg_dreg_dreg: u8,
         opcode_dreg_dreg_areg: u8,
+        opcode_dreg_areg: u8,
     ) -> Self {
         Op {
             mnemonic,
@@ -281,25 +282,9 @@ impl Op {
                         Parameters::DATA_REG,
                     ],
                 ),
-            ],
-        }
-    }
-
-    pub fn new_data_regval(
-        mnemonic: &'static str,
-        opcode_data_reg: u8,
-        opcode_data_val: u8,
-    ) -> Self {
-        Op {
-            mnemonic,
-            variants: vec![
                 OpVariant::new(
-                    opcode_data_reg,
-                    vec![Parameters::DATA_KEY, Parameters::DATA_REG],
-                ),
-                OpVariant::new(
-                    opcode_data_val,
-                    vec![Parameters::DATA_KEY, Parameters::NUMBER],
+                    opcode_dreg_areg,
+                    vec![Parameters::DATA_REG, Parameters::ADDR_REG],
                 ),
             ],
         }

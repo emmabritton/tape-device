@@ -2,15 +2,323 @@ Hangman
 1.0
 
 .strings
-welcome=Welcome to Hangman
-instructions=Try to guess a word by entering letters
-remaining=guesses left
+str_welcome=Welcome to Hangman
+str_instructions=Try to guess a word by entering letters
+str_remaining=" guesses left"
+str_input=Word:
+str_guessed=Guessed letters:
+str_input_hint=Enter a letter (esc to quit)
+str_win=You win!
+str_lose=You lose
+str_already_guessed=You already guessed that
+str_play_again_question=Do you want to play again? (y/n)
+str_input_error=Must be a lowercase letter
+str_final=Word was '
+.data
+words=["program","abruptly","lucky","buffalo","point","pleasure","player","rough","number","guess","puzzle","jazz","computer","jockey","pilot","game","keyboard","coffee","pencil","paper","whiteboard","marker","classroom","teacher","friend","education","crossword","pen","percent","terminal","mental","tactics","teaching"]
 
 .ops
-const word a0
-const char a1
+const true 0
+const false 1
+const reg_result d3
+const addr_word_len @0
+const addr_guesses_left @1
+const addr_max_guesses @2
+const addr_word @5
+const addr_input_word @100
+const addr_guessed_letters @200
+const addr_guessed_letter_count @300
+const escape 27
 
-start:  prtd welcome
-        prtln
-        prtd instructions
+run:
+#display welcome and reset memory
+	prts str_welcome
+	prtln
+	prts str_instructions
+	prtln
+	prtln
+init:
+#clear out selected and entered words
+	cpy a0 addr_guessed_letter_count
+clear_words:
+	cpy acc 0
+	memw a0
+	dec a0
+	cmp a0 @0
+	jne clear_words
 
+	cpy d0 0
+	cpy d1 0
+	cpy d2 0
+	cpy d3 0
+	cpy acc 0
+	cpy a0 @0
+	cpy a1 @0
+#game
+main_loop:
+	call select_word
+
+game_loop:
+	prtln
+	prtln
+	call compare_word
+	cmp reg_result true
+	je winner
+	memr addr_guesses_left
+	cmp acc 0
+	je loser
+draw_ui:
+	#Word: __________
+	prts str_input
+	memr addr_word_len
+	memp addr_input_word
+	prtln
+	#Guessed letters: <letters>
+	prts str_guessed
+	memr addr_max_guesses
+	cpy d0 acc
+	memr addr_guesses_left
+	memr addr_guessed_letter_count
+	inc acc
+	memp addr_guessed_letters
+	prtln
+	#<num> guesses left
+	memr addr_guesses_left
+	prt acc
+	prts str_remaining
+	prtln
+	#Enter a letter (esc to quit)
+	prts str_input_hint
+	prtln
+	rchr d0
+	#If they pressed escape, halt program
+	cmp d0 escape
+	jne dont_quit
+	halt
+dont_quit:
+	push d0
+	#if they have already guessed this letter
+	#show warning and reset
+	call check_if_letter_already_used
+	pop acc
+	cmp reg_result false
+	je new_letter
+	prtln
+	prts str_already_guessed
+	prtln
+	jmp game_loop
+new_letter:
+	push d0
+	call add_letter
+	pop acc
+	jmp game_loop
+
+winner:
+	prtln
+	prts str_win
+	prtln
+	prts str_final
+	memr addr_word_len
+	memp addr_word
+	prtc '''
+	prtln
+	jmp play_again
+
+loser:
+	prtln
+	prts str_lose
+	prtln
+	prts str_final
+	memr addr_word_len
+	memp addr_word
+	prtc '''
+	prtln
+	jmp play_again
+
+play_again:
+	prts str_play_again_question
+	prtln
+	rchr d0
+	cmp d0 'y'
+	je init
+	halt
+
+# check_if_letter_already_used
+#  Sets `reg_result` to `true` if user has already guessed a letter
+# param1 = new input letter
+# returns true if letter is in input_word
+check_if_letter_already_used:
+	memr addr_guessed_letter_count  # if no letters have
+	cmp acc 0 						# been guessed
+	je done                         # then exit
+
+	arg d0 1
+
+	cpy reg_result false
+
+	memr addr_guessed_letter_count     #load guessed len to acc
+	cpy d2 acc        #copy word len to d2 as we need acc for cmp and memr
+	cpy a0 addr_guessed_letters #load address of input
+
+check_letter:          ##
+	memr a0            #
+	cmp acc d0         # loop through guessed letters
+	je already_used    # if any match the new letter
+	dec d2             # return true
+	inc a0             # else return false
+	cmp d2 0           #
+	je done            ##
+	jmp check_letter
+
+already_used:
+	cpy reg_result true
+done:
+	ret
+
+# select_word
+#  Populates word, input_word, word_len, guesses_left, max_guesses
+#  with randomly selected word
+# no params
+# returns nothing
+select_word:
+	ld a0 words 0 0 #load address of word count
+	cpy d0 a0       #store word count in d0
+	rand d1         #store random number (0-255) in d1
+reduce:
+	cmp d0 d1       ##
+	je select       # while d1 is greater than d0
+	jg select       # reduce it by d0
+	sub d1 d0       #
+	cpy d1 acc      # this allows us to use d1 as the word idx
+	jmp reduce      ##
+select:
+	inc d1           	   #if this is 0 we'd be accessing the word lengths, so skip that
+	ld a0 words 0 d1 	   #load address of selected word length
+	cpy acc a0       	   #store length in acc
+	memw addr_word_len     #write len to mem
+	cpy d0 acc      	   #copy word length as we need acc for cmp
+	cpy a1 addr_input_word #load address where user input is stored
+clear_input:
+	cpy acc '_'
+	memw a1          #write underscore to memory
+	dec d0           #decrement remaining count
+	inc a1
+	cmp d0 0         #check if finished
+	jne clear_input  #jump if not
+
+	ld a0 words 0 d1
+	cpy d0 a0        #copy word length
+	ld a0 words d1 0 #load address of first char of word
+	cpy a1 addr_word #load address of memory were word is stored
+write_char:
+	cpy acc a0       #read char from data
+	memw a1          #write char to memory
+	dec d0           #decrement remaining char count
+	inc a0           #increment data pointer
+	inc a1           #increment mem pointer
+	cmp d0 0         #check if that was the last letter
+	jne write_char   #jump if not
+
+	cpy acc 10
+	memw addr_guesses_left
+	memw addr_max_guesses
+	ret
+
+
+# compare_word
+# no params
+# returns true if word and input_word match
+compare_word:
+	cpy reg_result true
+	memr addr_word_len
+	cpy d2 acc
+	cpy a0 addr_word          #set a0 to target word
+	cpy a1 addr_input_word    #set a1 to input word
+
+next_cmp_char:
+	memr a0
+	cpy d0 acc
+	memr a1
+	cmp d0 acc            #if word letter and input letter don't match
+	jne mismatch         #jump
+	inc a0               #move letter pointers
+	inc a1
+	dec d2
+	cmp d2 0             #if done
+
+	jne next_cmp_char        #jump
+	ret                  #else done
+mismatch:
+	cpy reg_result false
+	ret
+
+
+# add_letter
+#  Updates input_word with the guessed letter wherever correct
+# param1 = new input letter
+# returns = nothing
+add_letter:
+	arg d0 1         #get char
+
+	cpy d3 false #use d3 to track if letter is correct
+
+	memr addr_guessed_letter_count  ##
+	inc acc                         #  increment guessed letter count
+	memw addr_guessed_letter_count  ##
+
+	memr addr_guessed_letter_count
+	cpy d1 acc
+	cpy a0 addr_guessed_letters
+find_end:
+	cmp d1 0              ##
+	je found_end          # move pointer to
+	inc a0                # after last
+	dec d1                # guessed letter
+	jmp find_end          ##
+
+found_end:
+	cmp d0 97        ##
+	jl invalid_input # check char is lowercase letter
+	cmp d0 122       # jump and print error if not
+	jg invalid_input ##
+
+	dec a0                # dec to fix bug
+	cpy acc d0            # load letter
+	memw a0               # write to guessed letters
+
+	memr addr_word_len       #set target word len to acc
+	cpy d2 acc               #copy word len to d2
+	cpy a0 addr_word          #set a0 to target word
+	cpy a1 addr_input_word    #set a1 to input word
+
+next_char:
+	memr a0
+	cmp d0 acc            #if word letter and input letter match
+	je update_letter     #jump
+next_char_cont:
+	inc a0               #move letter pointers
+	inc a1
+	dec d2
+	cmp d2 0             #if done
+	jne next_char        #jump
+	cmp d3 false
+	je decrement_guesses
+	ret                  #else return
+
+update_letter:
+	cpy d3 true
+	cpy acc d0           #load letter into acc for writing
+	memw a1              #write letter to mem
+	jmp next_char_cont   #continue loop
+
+decrement_guesses:
+	memr addr_guesses_left  ##
+	dec acc                 #  decrement guesses left
+	memw addr_guesses_left  ##
+	ret
+
+invalid_input:
+	prtln
+	prts str_input_error
+	prtln
+	ret

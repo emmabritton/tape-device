@@ -11,6 +11,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{stdin, Read, Seek, SeekFrom, Write};
 use std::ops::{BitAnd, BitOr, BitXor, Not};
 use std::time::Duration;
+use crossterm::event::{Event, KeyModifiers, KeyCode};
 
 const SP_MAX: u16 = u16::MAX;
 const KEY_CODE_RETURN: u8 = 10;
@@ -137,6 +138,7 @@ impl Device {
 
     fn elog(&mut self, msg: &str) {
         self.printer.borrow_mut().eprint(msg);
+        self.printer.borrow_mut().newline();
     }
 
     #[allow(dead_code)]
@@ -202,19 +204,19 @@ impl Device {
         match op {
             NOP => {}
             ADD_REG_REG => self.add(
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             ),
             ADD_REG_VAL => self.add(
-                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
             SUB_REG_REG => self.sub(
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             ),
             SUB_REG_VAL => self.sub(
-                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
             MEMR_ADDR => self.load(
@@ -223,12 +225,12 @@ impl Device {
             )?,
             MEMR_AREG => self.load(
                 REG_ACC,
-                self.get_mem(self.get_addr_reg(self.tape_ops[idx + 1])?),
+                self.get_mem(self.get_addr_reg_content(self.tape_ops[idx + 1])?),
             )?,
             CPY_REG_VAL => self.load(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
             CPY_REG_REG => self.load(
                 self.tape_ops[idx + 1],
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             )?,
             CPY_AREG_REG_REG => self.copy_addr_reg(
                 self.tape_ops[idx + 1],
@@ -245,36 +247,36 @@ impl Device {
                 addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
             )?,
             MEMW_ADDR => self.store(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
-            MEMW_AREG => self.store(self.get_addr_reg(self.tape_ops[idx + 1])?),
-            JMP_AREG => self.jump(self.get_addr_reg(self.tape_ops[idx + 1])?),
+            MEMW_AREG => self.store(self.get_addr_reg_content(self.tape_ops[idx + 1])?),
+            JMP_AREG => self.jump(self.get_addr_reg_content(self.tape_ops[idx + 1])?),
             JE_AREG => self.cond_jump(
                 self.acc == compare::EQUAL,
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 1])?,
                 JE_AREG,
             ),
             JL_AREG => self.cond_jump(
                 self.acc == compare::LESSER,
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 1])?,
                 JL_AREG,
             ),
             JG_AREG => self.cond_jump(
                 self.acc == compare::GREATER,
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 1])?,
                 JG_AREG,
             ),
             JNE_AREG => self.cond_jump(
                 self.acc != compare::EQUAL,
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 1])?,
                 JNE_AREG,
             ),
             OVER_AREG => self.cond_jump(
                 self.flags.overflow,
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 1])?,
                 OVER_AREG,
             ),
             NOVER_AREG => self.cond_jump(
                 !self.flags.overflow,
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 1])?,
                 NOVER_AREG,
             ),
             JMP_ADDR => self.jump(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
@@ -311,69 +313,71 @@ impl Device {
             INC_REG => self.change(self.tape_ops[idx + 1], 1)?,
             DEC_REG => self.change(self.tape_ops[idx + 1], -1)?,
             CMP_REG_REG => self.compare(
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             ),
             CMP_REG_VAL => self.compare(
-                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
             CMP_AREG_ADDR => self.compare_16(
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 1])?,
                 addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
             ),
             CMP_AREG_AREG => self.compare_16(
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
-                self.get_addr_reg(self.tape_ops[idx + 2])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 1])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 2])?,
             ),
             CMP_AREG_REG_REG => self.compare_16(
-                self.get_addr_reg(self.tape_ops[idx + 1])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 1])?,
                 addr(
-                    self.get_reg(self.tape_ops[idx + 2])?,
-                    self.get_reg(self.tape_ops[idx + 3])?,
+                    self.get_reg_content(self.tape_ops[idx + 2])?,
+                    self.get_reg_content(self.tape_ops[idx + 3])?,
                 ),
             ),
             CMP_REG_REG_AREG => self.compare_16(
                 addr(
-                    self.get_reg(self.tape_ops[idx + 1])?,
-                    self.get_reg(self.tape_ops[idx + 2])?,
+                    self.get_reg_content(self.tape_ops[idx + 1])?,
+                    self.get_reg_content(self.tape_ops[idx + 2])?,
                 ),
-                self.get_addr_reg(self.tape_ops[idx + 3])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 3])?,
             ),
-            PRT_REG => self.print(self.get_reg(self.tape_ops[idx + 1])?),
+            PRT_REG => self.print(self.get_reg_content(self.tape_ops[idx + 1])?),
             PRT_VAL => self.print(self.tape_ops[idx + 1]),
-            PRTC_REG => self.printc(self.get_reg(self.tape_ops[idx + 1])?),
+            PRTC_REG => self.printc(self.get_reg_content(self.tape_ops[idx + 1])?),
             PRTC_VAL => self.printc(self.tape_ops[idx + 1]),
+            PRT_AREG => self.print(self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?),
+            PRTC_AREG => self.printc(self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?),
             PRTLN => {
                 self.printer.borrow_mut().newline();
             }
             PRTS_STR => {
                 self.print_tape_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))
             }
-            FOPEN_REG => self.open_file(self.get_reg(self.tape_ops[idx + 1])? as usize)?,
+            FOPEN_REG => self.open_file(self.get_reg_content(self.tape_ops[idx + 1])? as usize)?,
             FILER_REG_ADDR => self.read_file(
-                self.get_reg(self.tape_ops[idx + 1])? as usize,
+                self.get_reg_content(self.tape_ops[idx + 1])? as usize,
                 addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
             )?,
             FILER_REG_AREG => self.read_file(
-                self.get_reg(self.tape_ops[idx + 1])? as usize,
-                self.get_addr_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 1])? as usize,
+                self.get_addr_reg_content(self.tape_ops[idx + 2])?,
             )?,
             FILEW_REG_AREG => self.write_file(
-                self.get_reg(self.tape_ops[idx + 1])? as usize,
-                self.get_addr_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 1])? as usize,
+                self.get_addr_reg_content(self.tape_ops[idx + 2])?,
             )?,
             FILEW_REG_ADDR => self.write_file(
-                self.get_reg(self.tape_ops[idx + 1])? as usize,
+                self.get_reg_content(self.tape_ops[idx + 1])? as usize,
                 addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
             )?,
-            FSEEK_REG => self.seek_file(self.get_reg(self.tape_ops[idx + 1])? as usize)?,
+            FSEEK_REG => self.seek_file(self.get_reg_content(self.tape_ops[idx + 1])? as usize)?,
             FSKIP_REG_REG => self.skip_file(
-                self.get_reg(self.tape_ops[idx + 1])? as usize,
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 1])? as usize,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             )?,
             FSKIP_REG_VAL => self.skip_file(
-                self.get_reg(self.tape_ops[idx + 1])? as usize,
+                self.get_reg_content(self.tape_ops[idx + 1])? as usize,
                 self.tape_ops[idx + 2],
             )?,
             FOPEN_VAL => self.open_file(self.tape_ops[idx + 1] as usize)?,
@@ -383,11 +387,11 @@ impl Device {
             )?,
             FILER_VAL_AREG => self.read_file(
                 self.tape_ops[idx + 1] as usize,
-                self.get_addr_reg(self.tape_ops[idx + 2])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 2])?,
             )?,
             FILEW_VAL_AREG => self.write_file(
                 self.tape_ops[idx + 1] as usize,
-                self.get_addr_reg(self.tape_ops[idx + 2])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 2])?,
             )?,
             FILEW_VAL_ADDR => self.write_file(
                 self.tape_ops[idx + 1] as usize,
@@ -396,7 +400,7 @@ impl Device {
             FSEEK_VAL => self.seek_file(self.tape_ops[idx + 1] as usize)?,
             FSKIP_VAL_REG => self.skip_file(
                 self.tape_ops[idx + 1] as usize,
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             )?,
             FSKIP_VAL_VAL => {
                 self.skip_file(self.tape_ops[idx + 1] as usize, self.tape_ops[idx + 2])?
@@ -408,33 +412,35 @@ impl Device {
             ARG_REG_VAL => self.stack_arg(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
             ARG_REG_REG => self.stack_arg(
                 self.tape_ops[idx + 1],
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             )?,
             RET => self.stack_return(),
             CALL_ADDR => {
                 self.stack_call(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]), false)
             }
-            CALL_AREG => self.stack_call(self.get_addr_reg(self.tape_ops[idx + 1])?, true),
+            CALL_AREG => self.stack_call(self.get_addr_reg_content(self.tape_ops[idx + 1])?, true),
             SWP_REG_REG | SWP_AREG_AREG => {
                 self.swap(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?
             }
             IPOLL_ADDR => {
                 self.poll_input(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]), false)?
             }
-            IPOLL_AREG => self.poll_input(self.get_addr_reg(self.tape_ops[idx + 1])?, true)?,
+            IPOLL_AREG => {
+                self.poll_input(self.get_addr_reg_content(self.tape_ops[idx + 1])?, true)?
+            }
             RCHR_REG => self.read_char(self.tape_ops[idx + 1])?,
             RSTR_ADDR => self.read_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
-            RSTR_AREG => self.read_string(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
+            RSTR_AREG => self.read_string(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?,
             MEMP_ADDR => self.print_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
-            MEMP_AREG => self.print_string(self.get_addr_reg(self.tape_ops[idx + 1])?)?,
+            MEMP_AREG => self.print_string(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?,
             FCHK_REG_ADDR => self.cond_jump(
-                self.files.len() > self.get_reg(self.tape_ops[idx + 1])? as usize,
+                self.files.len() > self.get_reg_content(self.tape_ops[idx + 1])? as usize,
                 addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
                 FCHK_REG_ADDR,
             ),
             FCHK_REG_AREG => self.cond_jump(
-                self.files.len() > self.get_reg(self.tape_ops[idx + 1])? as usize,
-                self.get_addr_reg(self.tape_ops[idx + 2])?,
+                self.files.len() > self.get_reg_content(self.tape_ops[idx + 1])? as usize,
+                self.get_addr_reg_content(self.tape_ops[idx + 2])?,
                 FCHK_REG_AREG,
             ),
             FCHK_VAL_ADDR => self.cond_jump(
@@ -444,37 +450,78 @@ impl Device {
             ),
             FCHK_VAL_AREG => self.cond_jump(
                 self.files.len() > self.tape_ops[idx + 1] as usize,
-                self.get_addr_reg(self.tape_ops[idx + 2])?,
+                self.get_addr_reg_content(self.tape_ops[idx + 2])?,
                 FCHK_VAL_AREG,
             ),
             TIME => self.get_time(),
             RAND_REG => self.rand(self.tape_ops[idx + 1])?,
             SEED_REG => self.seed(self.tape_ops[idx + 1])?,
             AND_REG_REG => self.bit_and(
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             ),
             AND_REG_VAL => self.bit_and(
-                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
             OR_REG_REG => self.bit_or(
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             ),
             OR_REG_VAL => self.bit_or(
-                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
             XOR_REG_REG => self.bit_xor(
-                self.get_reg(self.tape_ops[idx + 1])?,
-                self.get_reg(self.tape_ops[idx + 2])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             ),
             XOR_REG_VAL => self.bit_xor(
-                self.get_reg(self.tape_ops[idx + 1])?,
+                self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
-            NOT_REG => self.bit_not(self.get_reg(self.tape_ops[idx + 1])?),
+            NOT_REG => self.bit_not(self.get_reg_content(self.tape_ops[idx + 1])?),
+            LD_AREG_DATA_VAL_VAL => self.load_data_addr(
+                self.tape_ops[idx + 1],
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+                self.tape_ops[idx + 4],
+                self.tape_ops[idx + 5],
+            )?,
+            LD_AREG_DATA_VAL_REG => self.load_data_addr(
+                self.tape_ops[idx + 1],
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+                self.tape_ops[idx + 4],
+                self.get_reg_content(self.tape_ops[idx + 5])?,
+            )?,
+            LD_AREG_DATA_REG_VAL => self.load_data_addr(
+                self.tape_ops[idx + 1],
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+                self.get_reg_content(self.tape_ops[idx + 4])?,
+                self.tape_ops[idx + 5],
+            )?,
+            LD_AREG_DATA_REG_REG => self.load_data_addr(
+                self.tape_ops[idx + 1],
+                addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+                self.get_reg_content(self.tape_ops[idx + 4])?,
+                self.get_reg_content(self.tape_ops[idx + 5])?,
+            )?,
+            CPY_REG_AREG => self.load_data(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
+            CMP_REG_AREG => self.compare_data(
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.tape_ops[idx + 2],
+            )?,
+            PRTD_AREG => self.print_data(self.tape_ops[idx + 1])?,
+            DEBUG => {
+                let dump = self.dump();
+                self.elog(&format!(
+                    "ACC: {:02X}  D0: {:02X}  D1: {:02X}  D2: {:02X}  D3: {:02X} A0: {:04X} A1: {:04X}",
+                    dump.acc, dump.data_reg[0], dump.data_reg[1], dump.data_reg[2], dump.data_reg[3], dump.addr_reg[0], dump.addr_reg[1]
+                ));
+                self.elog(&format!(
+                    "PC: {:4} SP: {:4X} FP: {:4X} Overflowed: {}",
+                    dump.pc, dump.sp, dump.fp, dump.overflow
+                ));
+            }
             _ => {
                 return Err(Error::msg(format!(
                     "Unknown instruction: {:02X}",
@@ -524,18 +571,18 @@ impl Device {
     ///Returns value of data reg for testing/debugging
     #[allow(dead_code)]
     fn assert_data_reg(&self, reg: u8, value: u8) {
-        assert_eq!(self.get_reg(reg).unwrap(), value);
+        assert_eq!(self.get_reg_content(reg).unwrap(), value);
     }
 
     ///Returns value of addr reg for testing/debugging
     #[allow(dead_code)]
     fn assert_addr_reg(&self, reg: u8, value: u16) {
-        assert_eq!(self.get_addr_reg(reg).unwrap(), value);
+        assert_eq!(self.get_addr_reg_content(reg).unwrap(), value);
     }
 
     //Accessors
 
-    fn get_reg(&self, id: u8) -> Result<u8> {
+    fn get_reg_content(&self, id: u8) -> Result<u8> {
         return match id {
             REG_ACC => Ok(self.acc),
             REG_D0 => Ok(self.data_reg[0]),
@@ -546,7 +593,7 @@ impl Device {
         };
     }
 
-    fn get_addr_reg(&self, id: u8) -> Result<u16> {
+    fn get_addr_reg_content(&self, id: u8) -> Result<u16> {
         return match id {
             REG_A0 => Ok(self.addr_reg[0]),
             REG_A1 => Ok(self.addr_reg[1]),
@@ -664,7 +711,33 @@ impl Device {
 
     fn read_char(&mut self, reg: u8) -> Result<()> {
         let mut char = [0_u8; 1];
-        stdin().read_exact(&mut char)?;
+        crossterm::terminal::enable_raw_mode()?;
+        let mut event = crossterm::event::read()?;
+        loop {
+            if let Event::Key(key) = event {
+                if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c') {
+                    crossterm::terminal::disable_raw_mode()?;
+                    std::process::exit(1);
+                }
+                match key.code {
+                    KeyCode::Enter => {
+                        char[0] = 10;
+                        break;
+                    }
+                    KeyCode::Char(chr) => {
+                        char[0] = chr as u8;
+                        break;
+                    }
+                    KeyCode::Esc => {
+                        char[0] = 27;
+                        break;
+                    }
+                    _  => {}
+                }
+            }
+            event = crossterm::event::read()?;
+        }
+        crossterm::terminal::disable_raw_mode()?;
 
         match reg {
             REG_ACC => self.acc = char[0],
@@ -796,6 +869,56 @@ impl Device {
                 }
             }
         }
+    }
+
+    fn load_data_addr(&mut self, areg: u8, addr: u16, offset1: u8, offset2: u8) -> Result<()> {
+        if (addr as usize + offset1 as usize) >= self.tape_data.len() {
+            return Err(Error::msg(format!(
+                "Data access out of bounds {}, max {}",
+                addr + offset1 as u16,
+                self.tape_data.len()
+            )));
+        }
+        let subarray_count = self.tape_data[addr as usize];
+        if offset1 > subarray_count {
+            return Err(Error::msg(format!(
+                "Data subarray access out of bounds {}, max {}",
+                offset1, subarray_count
+            )));
+        }
+        let mut subarray_addr = 0;
+        if offset1 > 0 {
+            subarray_addr += 1;
+            for offset in 0..offset1 {
+                subarray_addr += self.tape_data[addr as usize + offset as usize];
+            }
+        }
+        let data_addr = addr + subarray_addr as u16 + offset2 as u16;
+        if data_addr as usize >= self.tape_data.len() {
+            return Err(Error::msg(format!(
+                "Data byte access out of bounds {}, max {}",
+                data_addr,
+                self.tape_data.len()
+            )));
+        }
+        match areg {
+            REG_A0 => self.addr_reg[0] = data_addr,
+            REG_A1 => self.addr_reg[1] = data_addr,
+            _ => return Err(Error::msg(format!("Invalid addr register: {:02X}", areg))),
+        }
+        Ok(())
+    }
+
+    fn print_data(&mut self, areg: u8) -> Result<()> {
+        let addr = match areg {
+            REG_A0 => self.addr_reg[0],
+            REG_A1 => self.addr_reg[1],
+            _ => return Err(Error::msg(format!("Invalid addr register: {:02X}", areg))),
+        } as usize;
+        for i in 0..self.acc as usize {
+            self.log(&format!("{}", self.tape_data[addr + i] as char));
+        }
+        Ok(())
     }
 
     fn print(&mut self, val: u8) {
@@ -937,6 +1060,26 @@ impl Device {
         }
     }
 
+    fn compare_data(&mut self, lhs: u8, areg: u8) -> Result<()> {
+        let data_addr = match areg {
+            REG_A0 => self.addr_reg[0],
+            REG_A1 => self.addr_reg[1],
+            _ => {
+                return Err(Error::msg(format!(
+                    "Invalid addr register: {:02X}",
+                    areg
+                )))
+            }
+        };
+        let rhs = self.get_data_content(data_addr)?;
+        match lhs.cmp(&rhs) {
+            Ordering::Less => self.acc = compare::LESSER,
+            Ordering::Equal => self.acc = compare::EQUAL,
+            Ordering::Greater => self.acc = compare::GREATER,
+        }
+        Ok(())
+    }
+
     fn compare_16(&mut self, lhs: u16, rhs: u16) {
         match lhs.cmp(&rhs) {
             Ordering::Less => self.acc = compare::LESSER,
@@ -969,6 +1112,40 @@ impl Device {
         Ok(())
     }
 
+    fn load_data(&mut self, dest: u8, areg: u8) -> Result<()> {
+        let data_addr = match areg {
+            REG_A0 => self.addr_reg[0],
+            REG_A1 => self.addr_reg[1],
+            _ => {
+                return Err(Error::msg(format!(
+                    "Invalid addr register: {:02X}",
+                    areg
+                )))
+            }
+        };
+        let data = self.get_data_content(data_addr)?;
+        match dest {
+            REG_ACC => self.acc = data,
+            REG_D0 => self.data_reg[0] = data,
+            REG_D1 => self.data_reg[1] = data,
+            REG_D2 => self.data_reg[2] = data,
+            REG_D3 => self.data_reg[3] = data,
+            _ => return Err(Error::msg(format!("Invalid register: {:02X}", dest))),
+        }
+        Ok(())
+    }
+
+    fn get_data_content(&self, addr: u16) -> Result<u8> {
+        if addr as usize >= self.tape_data.len() {
+            return Err(Error::msg(format!(
+                "Data byte access out of bounds {}, max {}",
+                addr,
+                self.tape_data.len()
+            )));
+        }
+        Ok(self.tape_data[addr as usize])
+    }
+
     fn store(&mut self, addr: u16) {
         self.mem[addr as usize] = self.acc;
     }
@@ -994,7 +1171,7 @@ impl Device {
 
     fn stack_push_reg(&mut self, reg: u8) -> Result<()> {
         if matches!(reg, REG_ACC | REG_D0 | REG_D1 | REG_D2 | REG_D3) {
-            self.stack_push(self.get_reg(reg)?);
+            self.stack_push(self.get_reg_content(reg)?);
         } else if reg == REG_A0 {
             let bytes = self.addr_reg[0].to_be_bytes();
             self.sp_add(bytes[0]);
@@ -1310,6 +1487,127 @@ mod test {
         device.assert_mem(SP_MAX-1, 5);
 
         assert_eq!(printer.borrow().output(), String::new());
+        assert_eq!(printer.borrow().error_output(), String::new());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_simple_data() {
+        let ops = vec![
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 0, 0,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 0, 1,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 1, 0,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            PRTC_AREG, REG_A0,
+            PRTC_REG, REG_ACC,
+            PRT_AREG, REG_A0,
+            PRT_REG, REG_ACC
+        ];
+
+        let printer = DebugPrinter::new();
+        let mut device = Device::new(ops, vec![], vec![1, 2, 97, 15], vec![], printer.clone());
+
+        assert_eq!(device.dump(), Dump::default());
+
+        assert_step_device("LD A0 @0 0 0", &mut device, Dump { pc: 6, ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 9, acc: 1, ..Dump::default() });
+        assert_step_device("LD A0 @0 0 1", &mut device, Dump { pc: 15, acc: 1, addr_reg: [1, 0], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 18, acc: 2, addr_reg: [1, 0], ..Dump::default() });
+        assert_step_device("LD A0 @0 1 0", &mut device, Dump { pc: 24, acc: 2, addr_reg: [2, 0], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 27, acc: 97, addr_reg: [2, 0], ..Dump::default() });
+        assert_step_device("PRTC A0", &mut device, Dump { pc: 29, acc: 97, addr_reg: [2, 0], ..Dump::default() });
+        assert_step_device("PRTC ACC", &mut device, Dump { pc: 31, acc: 97, addr_reg: [2, 0], ..Dump::default() });
+        assert_step_device("PRT A0", &mut device, Dump { pc: 33, acc: 97, addr_reg: [2, 0], ..Dump::default() });
+        assert_step_device("PRT ACC", &mut device, Dump { pc: 35, acc: 97, addr_reg: [2, 0], ..Dump::default() });
+
+        assert_eq!(printer.borrow().output(), String::from("aa9797"));
+        assert_eq!(printer.borrow().error_output(), String::new());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_complex_data() {
+        let ops = vec![
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 0, 0,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 0, 1,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 5, 0, 0,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 5, 0, 1,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 5, 0, 2,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 0, 0,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 0, 1,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 0, 2,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A1, 0, 0, 1, 1,
+            PRTC_AREG, REG_A1,
+            LD_AREG_DATA_VAL_VAL, REG_A1, 0, 0, 1, 2,
+            PRT_AREG, REG_A1,
+            LD_AREG_DATA_VAL_VAL, REG_A1, 0, 12, 2, 0,
+            PRTC_AREG, REG_A1,
+            LD_AREG_DATA_VAL_VAL, REG_A1, 0, 12, 2, 4,
+            PRTC_AREG, REG_A1,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 0, 1,
+            CPY_REG_AREG, REG_ACC, REG_A0,
+            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 1, 0,
+            PRTD_AREG, REG_A0
+        ];
+
+        let printer = DebugPrinter::new();
+        //.data
+        //text=["abc"]
+        //lists=[[20,30],[50,51]]
+        //chars=[['h','e','l','l','o'],['w','o','r','l','d']]
+        let mut device = Device::new(ops,
+                                     vec![],
+                                     vec![1, 3, 97, 98, 99, 2, 2, 2, 20, 30, 50, 51, 2, 5, 5, 104, 101, 108, 108, 111, 119, 111, 114, 108, 100],
+                                     vec![],
+                                     printer.clone());
+
+        assert_eq!(device.dump(), Dump::default());
+
+        assert_step_device("LD A0 text 0 0", &mut device, Dump { pc: 6, ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 9, acc: 1, ..Dump::default() });
+        assert_step_device("LD A0 text 0 1", &mut device, Dump { pc: 15, acc: 1, addr_reg: [1, 0], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 18, acc: 3, addr_reg: [1, 0], ..Dump::default() });
+
+        assert_step_device("LD A0 lists 0 0", &mut device, Dump { pc: 24, acc: 3, addr_reg: [5, 0], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 27, acc: 2, addr_reg: [5, 0], ..Dump::default() });
+        assert_step_device("LD A0 lists 0 1", &mut device, Dump { pc: 33, acc: 2, addr_reg: [6, 0], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 36, acc: 2, addr_reg: [6, 0], ..Dump::default() });
+        assert_step_device("LD A0 lists 0 2", &mut device, Dump { pc: 42, acc: 2, addr_reg: [7, 0], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 45, acc: 2, addr_reg: [7, 0], ..Dump::default() });
+
+        assert_step_device("LD A0 chars 0 0", &mut device, Dump { pc: 51, acc: 2, addr_reg: [12, 0], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 54, acc: 2, addr_reg: [12, 0], ..Dump::default() });
+        assert_step_device("LD A0 chars 0 1", &mut device, Dump { pc: 60, acc: 2, addr_reg: [13, 0], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 63, acc: 5, addr_reg: [13, 0], ..Dump::default() });
+        assert_step_device("LD A0 chars 0 2", &mut device, Dump { pc: 69, acc: 5, addr_reg: [14, 0], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 72, acc: 5, addr_reg: [14, 0], ..Dump::default() });
+
+        assert_step_device("LD A1 text 1 1", &mut device, Dump { pc: 78, acc: 5, addr_reg: [14, 3], ..Dump::default() });
+        assert_step_device("PRTC A1", &mut device, Dump { pc: 80, acc: 5, addr_reg: [14, 3], ..Dump::default() });
+        assert_step_device("LD A1 text 1 2", &mut device, Dump { pc: 86, acc: 5, addr_reg: [14, 4], ..Dump::default() });
+        assert_step_device("PRT A1", &mut device, Dump { pc: 88, acc: 5, addr_reg: [14, 4], ..Dump::default() });
+
+        assert_step_device("LD A1 chars 2 0", &mut device, Dump { pc: 94, acc: 5, addr_reg: [14, 20], ..Dump::default() });
+        assert_step_device("PRTC A1", &mut device, Dump { pc: 96, acc: 5, addr_reg: [14, 20], ..Dump::default() });
+        assert_step_device("LD A1 chars 2 4", &mut device, Dump { pc: 102, acc: 5, addr_reg: [14, 24], ..Dump::default() });
+        assert_step_device("PRT A1", &mut device, Dump { pc: 104, acc: 5, addr_reg: [14, 24], ..Dump::default() });
+
+        assert_step_device("LD A0 chars 0 1", &mut device, Dump { pc: 110, acc: 5, addr_reg: [13, 24], ..Dump::default() });
+        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 113, acc: 5, addr_reg: [13, 24], ..Dump::default() });
+        assert_step_device("LD A0 chars 1 0", &mut device, Dump { pc: 119, acc: 5, addr_reg: [15, 24], ..Dump::default() });
+        assert_step_device("PRTD A0", &mut device, Dump { pc: 121, acc: 5, addr_reg: [15, 24], ..Dump::default() });
+
+        assert_eq!(printer.borrow().output(), String::from("b99wdhello"));
         assert_eq!(printer.borrow().error_output(), String::new());
     }
 }

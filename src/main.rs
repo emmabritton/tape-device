@@ -88,13 +88,12 @@ fn main() -> Result<()> {
             convert(matches.values_of("input")),
         )?;
     } else if let Some(matches) = matches.subcommand_matches("assemble") {
-        assembler::start(
-            matches.value_of("file").unwrap(),
-            matches.is_present("keep_whitespace"),
-        )?;
+        assembler::start(matches.value_of("file").unwrap())?;
     } else if let Some(matches) = matches.subcommand_matches("decompile") {
         decompiler::start(matches.value_of("file").unwrap())?;
     }
+
+    crossterm::terminal::disable_raw_mode()?;
 
     Ok(())
 }

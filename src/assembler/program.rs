@@ -94,6 +94,9 @@ pub(super) fn assemble(
                         line, err
                     )));
                 } else if labels.contains_key(lbl) {
+                    if labels.get(lbl).unwrap().0.is_some() {
+                        return Err(Error::msg(format!("label {} already defined", lbl)));
+                    }
                     labels.get_mut(lbl).unwrap().0 = Some(program.len());
                 } else {
                     labels.insert(lbl.to_string(), (Some(program.len()), vec![]));
@@ -150,7 +153,7 @@ pub(super) fn assemble(
                 program[*caller + offset + 1] = addr[1];
             }
         } else {
-            return Err(Error::msg(format!("Label '{}' is never set", lbl)));
+            return Err(Error::msg(format!("Label '{}' is never defined", lbl)));
         }
     }
 
@@ -391,7 +394,6 @@ mod test {
         strings.insert(String::from("str"), 0_u16);
 
         let result = assemble(input, strings, HashMap::new());
-        assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
             [

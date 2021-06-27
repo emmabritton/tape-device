@@ -4,6 +4,8 @@ pub mod hardware {
     pub const RAM_SIZE: usize = 0xFFFF;
     pub const DATA_REG_COUNT: usize = 4;
     pub const ADDR_REG_COUNT: usize = 2;
+    pub const MAX_DATA_ARRAY_LEN: usize = 255;
+    pub const MAX_DATA_ARRAY_COUNT: usize = 254;
 
     pub const REG_ACC: u8 = 0x01;
 
@@ -26,7 +28,7 @@ pub mod system {
     pub const TAPE_HEADER_1: u8 = 0xFD;
     pub const TAPE_HEADER_2: u8 = 0xA0;
 
-    pub const PRG_VERSION: u8 = 11;
+    pub const PRG_VERSION: u8 = 15;
 }
 
 pub mod code {
@@ -47,6 +49,7 @@ pub mod code {
     pub const CPY_AREG_AREG: u8 = 0x15;
     pub const SWP_REG_REG: u8 = 0x16;
     pub const SWP_AREG_AREG: u8 = 0x17;
+    pub const CPY_REG_AREG: u8 = 0x18;
 
     pub const JMP_ADDR: u8 = 0x20;
     pub const JMP_AREG: u8 = 0x21;
@@ -69,6 +72,7 @@ pub mod code {
     pub const CMP_AREG_ADDR: u8 = 0x33;
     pub const CMP_REG_REG_AREG: u8 = 0x34;
     pub const CMP_AREG_REG_REG: u8 = 0x35;
+    pub const CMP_REG_AREG: u8 = 0x36;
 
     pub const MEMR_ADDR: u8 = 0x40;
     pub const MEMR_AREG: u8 = 0x41;
@@ -79,8 +83,6 @@ pub mod code {
     pub const LD_AREG_DATA_REG_VAL: u8 = 0x46;
     pub const LD_AREG_DATA_VAL_REG: u8 = 0x47;
     pub const LD_AREG_DATA_VAL_VAL: u8 = 0x48;
-    pub const LEN_DATA_REG: u8 = 0x49;
-    pub const LEN_DATA_VAL: u8 = 0x4A;
 
     pub const CALL_ADDR: u8 = 0x70;
     pub const CALL_AREG: u8 = 0x71;
@@ -144,17 +146,19 @@ pub mod code {
     pub const TIME: u8 = 0xE6;
     pub const SEED_REG: u8 = 0xE7;
 
+    pub const DEBUG: u8 = 0xFD;
     pub const NOP: u8 = 0xFE;
     pub const HALT: u8 = 0xFF;
 }
 
 pub fn get_byte_count(opcode: u8) -> usize {
     match opcode {
-        PRTLN | RET | NOP | HALT | TIME => 1,
+        PRTLN | RET | NOP | HALT | TIME | DEBUG => 1,
         INC_REG | DEC_REG | JMP_AREG | JE_AREG | JNE_AREG | JL_AREG | JG_AREG | OVER_AREG
         | NOVER_AREG | MEMR_AREG | MEMW_AREG | CALL_AREG | PUSH_REG | PUSH_VAL | POP_REG
         | PRT_REG | PRT_VAL | PRTC_REG | PRTC_VAL | RCHR_REG | RAND_REG | NOT_REG | SEED_REG
-        | FSEEK_REG | FSEEK_VAL | FOPEN_REG | FOPEN_VAL | PRTD_AREG | MEMP_AREG => 2,
+        | FSEEK_REG | FSEEK_VAL | FOPEN_REG | FOPEN_VAL | PRTD_AREG | MEMP_AREG | PRT_AREG
+        | PRTC_AREG => 2,
         ADD_REG_REG | ADD_REG_VAL | SUB_REG_REG | SUB_REG_VAL | CPY_REG_REG | CPY_REG_VAL
         | SWP_AREG_AREG | SWP_REG_REG | JMP_ADDR | JE_ADDR | JNE_ADDR | JL_ADDR | JG_ADDR
         | OVER_ADDR | CMP_AREG_AREG | CPY_AREG_AREG | NOVER_ADDR | CMP_REG_REG | CMP_REG_VAL
@@ -163,7 +167,8 @@ pub fn get_byte_count(opcode: u8) -> usize {
         | MEMP_ADDR | FILER_REG_AREG | FILER_VAL_AREG | FILEW_REG_AREG | FILEW_VAL_AREG
         | IPOLL_ADDR | IPOLL_AREG | RSTR_ADDR | RSTR_AREG | AND_REG_VAL | AND_REG_REG
         | AND_REG_AREG | OR_REG_AREG | XOR_REG_AREG | OR_REG_VAL | OR_REG_REG | XOR_REG_REG
-        | XOR_REG_VAL | FCHK_REG_AREG | FCHK_VAL_AREG | ADD_REG_AREG | SUB_REG_AREG => 3,
+        | XOR_REG_VAL | FCHK_REG_AREG | FCHK_VAL_AREG | ADD_REG_AREG | SUB_REG_AREG
+        | CPY_REG_AREG | CMP_REG_AREG => 3,
         CMP_AREG_ADDR | CPY_AREG_ADDR | CMP_AREG_REG_REG | CMP_REG_REG_AREG | CPY_REG_REG_AREG
         | FCHK_REG_ADDR | FCHK_VAL_ADDR | CPY_AREG_REG_REG | FILER_REG_ADDR | FILEW_VAL_ADDR
         | FILER_VAL_ADDR | FILEW_REG_ADDR => 4,
@@ -214,7 +219,7 @@ pub fn is_jump_op(opcode: u8) -> bool {
 }
 
 #[rustfmt::skip]
-pub const ALL_OPS: [u8; 100] = [
+pub const ALL_OPS: [u8; 105] = [
     ADD_REG_REG, ADD_REG_VAL, ADD_REG_AREG,
     SUB_REG_REG, SUB_REG_VAL, SUB_REG_AREG,
     AND_REG_REG, AND_REG_VAL, AND_REG_AREG,
@@ -227,12 +232,14 @@ pub const ALL_OPS: [u8; 100] = [
     CPY_AREG_ADDR,
     CPY_AREG_REG_REG,
     CPY_REG_REG_AREG,
+    CPY_REG_AREG,
     CMP_AREG_AREG,
     CMP_AREG_ADDR,
     CMP_REG_REG_AREG,
     CMP_REG_REG,
     CMP_AREG_REG_REG,
     CMP_REG_VAL,
+    CMP_REG_AREG,
     JMP_ADDR, JMP_AREG,
     JE_ADDR, JE_AREG,
     JNE_ADDR, JNE_AREG,
@@ -246,9 +253,9 @@ pub const ALL_OPS: [u8; 100] = [
     RET,
     PUSH_REG, PUSH_VAL,
     POP_REG,
-    PRT_REG, PRT_VAL,
+    PRT_REG, PRT_VAL, PRT_AREG,
     PRTLN,
-    PRTC_REG, PRTC_VAL,
+    PRTC_REG, PRTC_VAL, PRTC_AREG,
     FOPEN_REG,
     FILER_REG_ADDR, FILER_REG_AREG,
     FILEW_REG_ADDR, FILEW_REG_AREG,
@@ -280,6 +287,7 @@ pub const ALL_OPS: [u8; 100] = [
     MEMP_ADDR, MEMP_AREG,
     PRTD_AREG,
     PRTS_STR,
+    DEBUG
 ];
 
 #[cfg(test)]

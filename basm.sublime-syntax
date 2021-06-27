@@ -1,0 +1,28 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+name: Tape Device ASM
+file_extensions:
+  - tasm
+  - basm
+scope: source.basm
+
+contexts:
+  main:
+    - match: '#.*'
+      scope: comment.basm
+    - match: '[a-zA-Z](=)[^\s].+'
+      captures:
+        1: comment.basm
+    - match: '[a-zA-Z0-9_]+:'
+      scope: constant.numeric.basm
+    - match: '(?i)\b(filer|debug|filew|inc|dec|ret|memp|arg|push|pop|rand|seed|time|ld|rchr|rstr|prtc|prt|const|fopen|prtln|fseek|nop|halt|fread|memw|memr|fwrite|prts|prtd|add|sub|cmp|cpy)\b'
+      scope: keyword.structure.basm
+    - match: '(?i)\b(d0|d1|d2|d3|a0|a1|acc)\b'
+      scope: entity.other.attribute-name.basm
+    - match: '(?i)(\.data|\.ops|\.strings)\b'
+      scope: support.function.basm
+    - match: '(?i)\b(fchk|ipoll|jmp|je|jne|jl|jg|over|nover|call)\s+(a[0-1]|[a-zA-Z0-9_]+)\b'
+      captures:
+        1: keyword.structure.basm
+        2: constant.numeric.basm

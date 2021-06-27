@@ -104,17 +104,17 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_whitespace() {
         let mut input = vec![
             String::from("nows1=  before"),
             String::from("nows2=  before  "),
             String::from("nows3=before  "),
             String::from("ws1=\"  before\""),
-            String::from("ws2=\"  before  \""),
-            String::from("ws3=\"before  \""),
+            String::from("ws2=\"before  \""),
+            String::from("ws3=\"  before  \""),
             String::from(".ops"),
         ];
-        let mut input2 = input.clone();
         let result = compile_strings(&mut input);
         assert!(input.is_empty());
         assert!(result.is_ok());
@@ -131,9 +131,12 @@ mod tests {
         assert_eq!(
             result.1,
             [
-                6, 98, 101, 102, 111, 114, 101, 6, 98, 101, 102, 111, 114, 101, 6, 98, 101, 102,
-                111, 114, 101, 6, 32, 32, 98, 101, 102, 111, 114, 101, 6, 98, 101, 102, 111, 114,
-                101, 32, 32, 6, 32, 32, 98, 101, 102, 111, 114, 101, 32, 32
+                6, 98, 101, 102, 111, 114, 101,
+                6, 98, 101, 102, 111, 114, 101,
+                6, 98, 101, 102, 111, 114, 101,
+                8, 32, 32, 98, 101, 102, 111, 114, 101,
+                8, 98, 101, 102, 111, 114, 101, 32, 32,
+                10, 32, 32, 98, 101, 102, 111, 114, 101, 32, 32
             ]
         )
     }

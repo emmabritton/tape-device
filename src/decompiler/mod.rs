@@ -283,6 +283,7 @@ pub fn decode(
         XOR_REG_VAL => ("XOR", vec![decode_reg(op[1]), decode_num(op[2])]),
         XOR_REG_AREG => ("XOR", vec![decode_reg(op[1]), decode_reg(op[2])]),
         TIME => ("TIME", vec![]),
+        DEBUG => ("DEBUG", vec![]),
         NOT_REG => ("NOT", vec![decode_reg(op[1])]),
         SEED_REG => ("SEED", vec![decode_reg(op[1])]),
         RAND_REG => ("RAND", vec![decode_reg(op[1])]),

@@ -1,0 +1,6 @@
+Hello World!
+1
+.strings
+greeting=Hello World!
+.ops
+PRTS greeting

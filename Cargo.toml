@@ -1,0 +1,23 @@
+[package]
+name = "tape-device"
+version = "1.0.0"
+description = "Executor, compiler and decompiler for fictional tape device"
+authors = ["Ray Britton <raybritton@gmail.com>"]
+edition = "2018"
+readme = "README.md"
+license-file = "LICENSE"
+
+[dependencies]
+anyhow = "1.0.40"
+bitflags = "1.2.1"
+chrono = "0.4.19"
+clap = "2.33.3"
+#ui dependencies
+crossterm = "0.19.0"
+git-version = "0.3.4"
+lazy_static = "1.4.0"
+random-fast-rng = "0.1.1"
+regex = "1.5.4"
+
+[dev-dependencies]
+tempfile = "3.2.0"

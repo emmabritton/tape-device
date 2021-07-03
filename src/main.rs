@@ -80,12 +80,12 @@ fn main() -> Result<()> {
     if matches.is_present("tape") {
         device::start(
             matches.value_of("tape").unwrap(),
-            convert(matches.values_of("input")),
+            validate(convert(matches.values_of("input"))),
         )?;
     } else if let Some(matches) = matches.subcommand_matches("run") {
         device::start(
             matches.value_of("tape").unwrap(),
-            convert(matches.values_of("input")),
+            validate(convert(matches.values_of("input"))),
         )?;
     } else if let Some(matches) = matches.subcommand_matches("assemble") {
         assembler::start(matches.value_of("file").unwrap())?;
@@ -104,4 +104,14 @@ fn convert(values: Option<Values>) -> Vec<&str> {
     } else {
         vec![]
     }
+}
+
+fn validate(files: Vec<&str>) -> Vec<&str> {
+    for file in files.iter() {
+        if !std::path::Path::new(file).is_file() {
+            eprintln!("'{}' is not a file", file);
+            std::process::exit(1);
+        }
+    }
+    return files;
 }

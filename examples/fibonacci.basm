@@ -1,5 +1,6 @@
 Fibonacci
 1.0
+.ops
 const stop_at 12 #number of numbers to print
 
       PRT 0           #print 0

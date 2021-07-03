@@ -82,7 +82,7 @@ pub fn generate_program_model(input: Vec<String>) -> Result<ProgramModel> {
                         parse_data(&mut program_model, &line, line_num).context(line)?
                     }
                     ParseMode::Ops => {
-                        if trimmed.starts_with("const") {
+                        if trimmed.to_lowercase().starts_with("const") {
                             parse_constant(&mut program_model, &line, line_num).context(line)?
                         } else {
                             parse_op(&mut program_model, &line, line_num).context(line)?

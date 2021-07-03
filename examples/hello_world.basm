@@ -4,3 +4,4 @@ Hello World!
 greeting=Hello World!
 .ops
 PRTS greeting
+prtLN

@@ -10,7 +10,7 @@ str_file_error=Must provide file, e.g. hello.tape
 # 2 - Prog name
 # 3 - Prog ver
 # 4 - Data used to gen prog
-dat_file=[[xFD, xA0, 15], [2, 'H', 'W'], [1, '1'], ['H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd']]
+dat_file=[[xFD, xA0, 16], [2, 'H', 'W'], [1, '1'], ['H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd']]
 .ops
 const op_prtc x95
 const op_prtln x92

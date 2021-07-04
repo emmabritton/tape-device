@@ -85,7 +85,7 @@ pub fn start(path: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn collect_data(ops: &[u8], data: &[u8]) -> (Vec<String>, usize) {
+pub fn collect_data(_: &[u8], data: &[u8]) -> (Vec<String>, usize) {
     //TODO finish
     let mut data = data.to_vec();
     let mut output = vec![];

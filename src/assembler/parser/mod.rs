@@ -122,13 +122,11 @@ fn parse_string(program_model: &mut ProgramModel, line: &str, line_num: usize) -
                 line_num
             )));
         }
-        if content.starts_with('"') && content.ends_with('"') {
-            if content.len() > 2 {
-                let mut chars = content.chars();
-                chars.next();
-                chars.next_back();
-                content = chars.collect();
-            }
+        if content.starts_with('"') && content.ends_with('"') && content.len() > 2 {
+            let mut chars = content.chars();
+            chars.next();
+            chars.next_back();
+            content = chars.collect();
         }
         if content.len() > MAX_STRING_LEN {
             return Err(Error::msg(format!(

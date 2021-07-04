@@ -113,5 +113,5 @@ fn validate(files: Vec<&str>) -> Vec<&str> {
             std::process::exit(1);
         }
     }
-    return files;
+    files
 }

@@ -238,6 +238,7 @@ pub fn is_jump_op(opcode: u8) -> bool {
 }
 
 #[rustfmt::skip]
+#[allow(dead_code)]
 pub const ALL_OPS: [u8; 109] = [
     ADD_REG_REG, ADD_REG_VAL, ADD_REG_AREG,
     SUB_REG_REG, SUB_REG_VAL, SUB_REG_AREG,

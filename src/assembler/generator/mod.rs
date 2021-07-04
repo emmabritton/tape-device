@@ -7,7 +7,7 @@ use crate::constants::system::{PRG_VERSION, TAPE_HEADER_1, TAPE_HEADER_2};
 use anyhow::{Error, Result};
 use std::collections::{BTreeMap, HashMap};
 
-pub fn generate_byte_code(mut program_model: ProgramModel) -> Result<Vec<u8>> {
+pub fn generate_byte_code(program_model: ProgramModel) -> Result<Vec<u8>> {
     let mut output = vec![TAPE_HEADER_1, TAPE_HEADER_2, PRG_VERSION];
     output.push(program_model.name.len() as u8);
     output.extend_from_slice(program_model.name.as_bytes());
@@ -153,20 +153,6 @@ fn generate_string_bytes(
     }
 
     Ok((output, addresses))
-}
-
-fn get_label_keys_for_line(labels: &HashMap<String, LabelModel>, line_num: usize) -> Vec<String> {
-    labels
-        .values()
-        .filter(|model| {
-            model
-                .definition
-                .as_ref()
-                .map(|def| def.line_num == line_num)
-                .unwrap_or(false)
-        })
-        .map(|model| model.key.clone())
-        .collect()
 }
 
 fn convert_label_map_to_linenum(

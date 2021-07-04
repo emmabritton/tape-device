@@ -56,6 +56,7 @@ pub struct DebugPrinter {
 
 impl DebugPrinter {
     #[allow(clippy::new_ret_no_self)]
+    #[allow(dead_code)]
     pub fn new() -> RcBox<dyn Printer> {
         Rc::new(RefCell::new(Box::new(DebugPrinter::default())))
     }

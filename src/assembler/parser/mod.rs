@@ -73,7 +73,7 @@ pub fn generate_program_model(input: Vec<String>) -> Result<ProgramModel> {
                         return Err(Error::msg(format!(
                             "Unexpected content: {}\n\n{}",
                             line, FORMAT_ERROR
-                        )))
+                        )));
                     }
                     ParseMode::Strings => {
                         parse_string(&mut program_model, &line, line_num).context(line)?

@@ -184,6 +184,13 @@ select_word:
 	ld a0 words 0 0 #load address of word count
 	cpy d0 a0       #store word count in d0
 	rand d1         #store random number (0-255) in d1
+    cmp d1 d0       ##
+    jg rerand       #
+    jmp reduce      # while the random number
+rerand:             # is greater than the number
+    rand d1         # of words keeping generating
+    cmp d1 d0       # new numbers
+    jg rerand       ##
 reduce:
 	cmp d0 d1       ##
 	je select       # while d1 is greater than d0

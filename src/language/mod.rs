@@ -49,8 +49,22 @@ pub fn parse_line(input: &str) -> Result<(u8, Vec<Param>)> {
 mod tests {
     use super::*;
     use crate::constants::code::*;
-    use crate::constants::hardware::{REG_A1, REG_D0};
-    use anyhow::Context;
+    use crate::constants::hardware::{REG_A1, REG_ACC, REG_D3};
 
-    //TODO write tests
+    #[test]
+    #[rustfmt::skip]
+    fn basic_test() {
+        assert_eq!(
+            parse_line("cpy acc 5").unwrap(),
+            (CPY_REG_VAL, vec![Param::DataReg(REG_ACC), Param::Number(5)])
+        );
+        assert_eq!(
+            parse_line("ld a1 test d3 xF1").unwrap(),
+            (
+                LD_AREG_DATA_REG_VAL,
+                vec![Param::AddrReg(REG_A1), Param::DataKey(String::from("test")), Param::DataReg(REG_D3), Param::Number(241)]
+            )
+        );
+        assert_eq!(parse_line("halt").unwrap(), (HALT, vec![]));
+    }
 }

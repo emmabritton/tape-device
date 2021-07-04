@@ -146,6 +146,7 @@ impl Op {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_file_mem_value(
         mnemonic: &'static str,
         opcode_reg_addr: u8,
@@ -285,6 +286,7 @@ impl Op {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_reg_complex(
         mnemonic: &'static str,
         opcode_dreg_dreg: u8,

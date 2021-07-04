@@ -1,0 +1,113 @@
+Multiply Example
+1
+
+# Demonstrates how to multiply numbers with this language
+
+.strings
+fail1="Test "
+fail2=" failed, was "
+pass=All good
+
+.ops
+#1*1 = 1
+push 1
+push 1
+call multiply
+cmp d3 1
+je test2
+push 1
+call fail
+
+test2:
+#1*2 = 2
+push 1
+push 2
+call multiply
+cmp d3 2
+je test3
+push 2
+call fail
+
+test3:
+#2*2 = 4
+push 2
+push 2
+call multiply
+cmp d3 4
+je test4
+push 3
+call fail
+
+test4:
+#5*5 = 25
+push 5
+push 5
+call multiply
+cmp d3 25
+je test5
+push 4
+call fail
+
+test5:
+#10*8 = 80
+push 10
+push 8
+call multiply
+cmp d3 80
+je test6
+push 5
+call fail
+
+test6:
+#10*25 = 250
+push 10
+push 25
+call multiply
+cmp d3 250
+je test7
+push 6
+call fail
+
+test7:
+#11*25 = 275, wraps to 19
+push 11
+push 25
+call multiply
+cmp d3 19
+je fin
+push 7
+call fail
+
+fin:
+prts pass
+prtln
+halt
+
+fail:
+arg d0 1
+prts fail1
+prt d0
+prts fail2
+prt d3
+prtln
+halt
+
+
+# multiply
+#  Multiplies two numbers together
+#  e.g. multiply 4 6
+# param1 = value 1
+# param2 = value 2
+# returns = result
+multiply:
+ 	arg d0 2
+ 	arg d1 1 
+ 	cpy d3 0
+
+m_loop:
+ 	add d3 d1
+ 	cpy d3 acc
+ 	dec d0
+ 	cmp d0 0
+ 	jne m_loop
+ 	ret

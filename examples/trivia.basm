@@ -1,0 +1,274 @@
+Trivia
+1
+
+.data
+d_q=["What is the capital of Poland?", "What was the most downloaded app of 2020?", "Europe is separated from Africa by which sea?", "What is the collective name for a group of crows?", "What is Japanese sake made from?", "What nut is used to make marzipan?", "Who paint the 'Water Lilies'?", "What colour is a Welsh Poppy?", "What sport does Constantino Rocca play?", "What is the world's longest river?", "What type of weapon is a falchion?", "Which freshwater lake is the largest in the world?"]
+d_a1=["warsaw", "tinder", "mediterranean sea", "flock", "rice", "peanut", "turner", "yellow", "soccer", "ganges", "gun", "superior"]
+d_a2=["krakow", "tik tok", "european sea", "dark night", "wheat", "almonds", "van gogh", "red", "golf", "nile", "bow", "victoria"]
+d_a3=["gdansk", "facebook", "caspian sea", "murder", "roe", "brazil", "monet", "white", "fencing", "amazon", "sword", "tanganyika"]
+d_c=[[1, 2, 1, 3, 1, 2, 3, 1, 2, 2, 3, 1]]
+
+.strings
+s_intro1=Trivia Questions! (use ctrl+c to quit)
+s_intro2=Which mode do you want to play?
+s_intro3=1) Multiple choice
+s_intro4=2) Type exact answer in
+s_intro_score="Score: "
+s_mode_error=Invalid input
+s_input_warning=Always answer in lowercase and with no punctuation
+s_question="Question "
+s_multi_correct=Correct, you get 2 points
+s_input_correct=Correct, you get 10 points
+s_multi_wrong=Incorrect! The answer was (
+s_input_wrong=Incorrect! The answer was '
+s_input_prompt=Enter your answer
+.ops
+const MODE_MULTI x1
+const MODE_INPUT x2
+const ADDR_MODE @0
+const ADDR_QUESTION_NUM @1
+const ADDR_SCORE @2
+const ADDR_SELECTED_QUESTION @4
+const ADDR_INPUT @50
+
+prtln
+prts s_intro1            ##
+prtln                    #
+prts s_intro2            #  print greeting
+prtln                    #
+prts s_intro3            #
+prtln                    #
+prts s_intro4            #
+prtln                    ##
+
+rchr d0                  # wait for input
+
+cmp d0 '1'               ##
+je setup_multi_mode      # process input
+cmp d0 '2'               #
+je setup_input_mode      ##
+
+prts s_mode_error        ##
+prtln                    # print error if input not '1' or '2'
+halt                     ##
+
+setup_multi_mode:        ##
+cpy acc MODE_MULTI       # setup for multiple
+memw ADDR_MODE           # choice mode
+jmp game                 ##
+
+setup_input_mode:        ##
+prts s_input_warning     # setup for exact
+prtln                    # input mode
+cpy acc MODE_INPUT       #
+memw ADDR_MODE           # print input warning
+jmp game                 ##
+
+game:
+memr ADDR_QUESTION_NUM
+inc acc
+memw ADDR_QUESTION_NUM
+
+call select_question
+prtln                         ##
+prtln                         #
+prts s_intro_score			  # print
+memr ADDR_SCORE               #
+prt acc                       #
+prtln                         #
+memr ADDR_QUESTION_NUM		  # Score: <num>
+prts s_question               # Question <idx>!
+prt acc                       # <trivia question>?
+prtc '!'                      #
+prtln                         #
+memr ADDR_SELECTED_QUESTION   #
+ld a0 d_q 0 acc               #load question length address
+ld a1 d_q acc 0               #load question address
+cpy acc a0                    #store question length
+prtd a1                       #print question
+prtln                         #
+memr ADDR_MODE                #
+cmp acc MODE_INPUT            #
+je input_answer               # jump to get answer
+jmp multi_answer              #
+halt                          ##
+
+
+multi_answer:
+	#answer 1
+	memr ADDR_SELECTED_QUESTION
+	ld a0 d_a1 0 acc              #load answer length address
+	cpy d0 a0                     #store answer length
+	ld a0 d_a1 acc 0              #load answer address
+	prtc '1'
+	prtc ')'
+	prtc ' '
+	cpy acc d0                    #load length in acc
+	prtd a0                       #print answer
+	prtln
+	#answer 2
+	memr ADDR_SELECTED_QUESTION
+	ld a0 d_a2 0 acc              #load answer length address
+	cpy d0 a0                     #store answer length
+	ld a0 d_a2 acc 0              #load answer address
+	prtc '2'
+	prtc ')'
+	prtc ' '
+	cpy acc d0                    #load length in acc
+	prtd a0                       #print answer
+	prtln
+	#answer 3
+	memr ADDR_SELECTED_QUESTION
+	ld a0 d_a3 0 acc              #load answer length address
+	cpy d0 a0                     #store answer length
+	ld a0 d_a3 acc 0              #load answer address
+	prtc '3'
+	prtc ')'
+	prtc ' '
+	cpy acc d0                    #load length in acc
+	prtd a0                       #print answer
+	prtln
+
+	rchr d0                       #read input
+	cmp d0 '1'
+	je ma_answer1
+	cmp d0 '2'
+	je ma_answer2
+	cmp d0 '3'
+	je ma_answer3
+
+	prtln
+	prts s_input_warning
+	prtln
+	jmp multi_answer
+
+	ma_answer1:
+		push 1
+		jmp check_multi_answer
+	ma_answer2:
+		push 2
+		jmp check_multi_answer
+	ma_answer3:
+		push 3
+		jmp check_multi_answer
+
+	check_multi_answer:
+		pop d3                  #get selected answer
+		memr ADDR_SELECTED_QUESTION
+		dec acc
+		ld a0 d_c 1 acc         #load address of correct answer idx
+		cpy d1 a0               #store correct answer idx
+		cmp d1 d3               #check answer
+		je multi_correct
+		prtln
+		prts s_multi_wrong
+		prt d1
+		prtc ')'
+		prtln
+		jmp game
+	multi_correct:
+		prtln
+		prts s_multi_correct
+		prtln
+		memr ADDR_SCORE
+		add acc 2
+		memw ADDR_SCORE
+		jmp game
+
+input_answer:
+		prts s_input_prompt
+		prtln
+		rstr ADDR_INPUT          # read input, store len in acc
+		push acc                 # temp store len on stack
+		call get_address_of_correct_answer
+		pop d0
+		cmp d0 d3
+		jne input_mismatch
+
+	compare_word:
+		cpy d2 d0
+		cpy a1 ADDR_INPUT    #set a1 to input word
+
+	next_cmp_char:
+		cpy d0 a0                #copy letter from correct answer
+		memr a1                  #copy letter from input answer
+		cmp d0 acc               #if letters don't match
+		jne input_mismatch       #jump
+		inc a0                   #els emove letter pointers
+		inc a1
+		dec d2
+		cmp d2 0                 #if done
+		jne next_cmp_char        #jump
+		jmp input_correct
+	input_mismatch:
+		prtln
+		prts s_input_wrong
+		call get_address_of_correct_answer
+		cpy acc d3
+		prtd a0
+		prtc '''
+		prtln
+		jmp game
+	input_correct:
+		prtln
+		prts s_input_correct
+		prtln
+		memr ADDR_SCORE
+		add acc 10
+		memw ADDR_SCORE
+		jmp game
+
+
+# get_address_of_correct_answer
+#  Loads the address of the correct answer
+#  Sets A0 to first byte of correct answer based on ADDR_SELECTED_QUESTION
+#  and D3 to length of answer
+# no parms
+# returns nothing
+get_address_of_correct_answer:
+		memr ADDR_SELECTED_QUESTION
+		cpy d2 acc
+		dec acc
+		ld a0 d_c 1 acc          #load address of correct answer idx
+		cpy d0 a0
+		cmp d0 1
+		je ac_1
+		cmp d0 2
+		je ac_2
+		jmp ac_3
+
+	ac_1:
+		ld a0 d_a1 d2 0
+		ld a1 d_a1 0 d2
+		cpy d3 a1
+		ret
+	ac_2:
+		ld a0 d_a2 d2 0
+		ld a1 d_a2 0 d2
+		cpy d3 a1
+		ret
+	ac_3:
+		ld a0 d_a3 d2 0
+		ld a1 d_a3 0 d2
+		cpy d3 a1
+		ret
+
+# select_question
+#  Randomly select a question
+#  Sets ADDR_SELECTED_QUESTION to a valid index for a question (starting from 1)
+# no params
+# returns nothing
+select_question:
+		ld a0 d_q 0 0  #load address of question count
+		cpy d0 a0       #store question count in d0
+	rerand:             # is greater than the number
+		rand d1         # of questions
+		cmp d1 d0       # or 0
+		jg rerand       # keeping generating
+		cmp d1 0        # new numbers
+		je rerand       ##
+
+		cpy acc d1
+		memw ADDR_SELECTED_QUESTION
+		prtln
+		ret

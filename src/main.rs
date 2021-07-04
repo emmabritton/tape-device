@@ -26,14 +26,24 @@ fn main() -> Result<()> {
             AppSettings::VersionlessSubcommands,
         ])
         .subcommand(
-            SubCommand::with_name("assemble").arg(
-                Arg::with_name("file")
-                    .help("Compile .basm into .tape")
-                    .takes_value(true)
-                    .min_values(1)
-                    .max_values(2)
-                    .required(true),
-            ),
+            SubCommand::with_name("assemble")
+                .arg(
+                    Arg::with_name("file")
+                        .help("Compile .basm into .tape")
+                        .takes_value(true)
+                        .min_values(1)
+                        .max_values(2)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("debug")
+                        .help("Print assembler interpretation of program")
+                        .takes_value(false)
+                        .long("debug")
+                        .short("d")
+                        .required(false)
+                        .multiple(false),
+                ),
         )
         .subcommand(
             SubCommand::with_name("decompile").arg(
@@ -88,7 +98,10 @@ fn main() -> Result<()> {
             validate(convert(matches.values_of("input"))),
         )?;
     } else if let Some(matches) = matches.subcommand_matches("assemble") {
-        assembler::start(matches.value_of("file").unwrap())?;
+        assembler::start(
+            matches.value_of("file").unwrap(),
+            matches.is_present("debug"),
+        )?;
     } else if let Some(matches) = matches.subcommand_matches("decompile") {
         decompiler::start(matches.value_of("file").unwrap())?;
     }
@@ -113,5 +126,5 @@ fn validate(files: Vec<&str>) -> Vec<&str> {
             std::process::exit(1);
         }
     }
-    return files;
+    files
 }

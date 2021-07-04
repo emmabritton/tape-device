@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-pub fn start(basm: &str) -> Result<()> {
+pub fn start(basm: &str, debug: bool) -> Result<()> {
     let path = PathBuf::from(basm);
 
     let output_file_name = if let Some(output_file_stem) = path.file_stem() {
@@ -24,7 +24,7 @@ pub fn start(basm: &str) -> Result<()> {
     let mut output_file_path = PathBuf::from(path.parent().unwrap());
     output_file_path.push(output_file_name);
 
-    let bytes = assemble(read_lines(basm)?, false)?;
+    let bytes = assemble(read_lines(basm)?, debug)?;
 
     let path = output_file_path.to_string_lossy().to_string();
     match File::create(output_file_path) {
@@ -47,7 +47,7 @@ pub fn start(basm: &str) -> Result<()> {
 fn assemble(input: Vec<String>, debug_interpretation: bool) -> Result<Vec<u8>> {
     let program_model = generate_program_model(input)?;
     if debug_interpretation {
-        println!("{:?}", program_model);
+        println!("{:#?}", program_model);
     }
     program_model.validate()?;
     let bytes = generate_byte_code(program_model)?;
@@ -90,7 +90,7 @@ See language document for ops
 mod test {
     use super::*;
     use crate::constants::code::{
-        ADD_REG_REG, ARG_REG_VAL, CALL_ADDR, CMP_REG_REG, CPY_REG_REG, CPY_REG_VAL, HALT, JE_ADDR,
+        ADD_REG_REG, ARG_REG_VAL, CALL_ADDR, CMP_REG_REG, CPY_REG_AREG, CPY_REG_VAL, HALT, JE_ADDR,
         LD_AREG_DATA_VAL_VAL, PRTC_VAL, PRTLN, PRTS_STR, PRT_REG, PUSH_REG, RET,
     };
     use crate::constants::hardware::{REG_A0, REG_ACC, REG_D0, REG_D1, REG_D2};
@@ -138,7 +138,7 @@ mod test {
             1, 49,
             0, 65,
             LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 1, 0,
-            CPY_REG_REG, REG_D0, REG_A0,
+            CPY_REG_AREG, REG_D0, REG_A0,
             PRT_REG, REG_D0,
             PRTS_STR, 0, 10,
             PRT_REG, REG_D0,
@@ -146,7 +146,7 @@ mod test {
             ADD_REG_REG, REG_D0, REG_D0,
             PUSH_REG, REG_ACC,
             LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 1, 1,
-            CPY_REG_REG, REG_D0, REG_A0,
+            CPY_REG_AREG, REG_D0, REG_A0,
             PUSH_REG, REG_D0,
             PRT_REG, REG_D0,
             CALL_ADDR, 0, 40,
@@ -161,7 +161,7 @@ mod test {
             PRTS_STR, 0, 5,
             PRTLN,
             RET,
-            0, 10,
+            0, 12,
             4, 70, 65, 73, 76,
             4, 80, 65, 83, 83,
             1, 43,

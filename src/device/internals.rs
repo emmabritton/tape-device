@@ -5,13 +5,13 @@ use crate::device::internals::RunResult::{Breakpoint, EoF, ProgError};
 use crate::printer::{Printer, RcBox};
 use anyhow::{Error, Result};
 use chrono::{Local, Timelike};
+use crossterm::event::{Event, KeyCode, KeyModifiers};
 use random_fast_rng::{FastRng, Random};
 use std::cmp::Ordering;
 use std::fs::{File, OpenOptions};
 use std::io::{stdin, Read, Seek, SeekFrom, Write};
 use std::ops::{BitAnd, BitOr, BitXor, Not};
 use std::time::Duration;
-use crossterm::event::{Event, KeyModifiers, KeyCode};
 
 const SP_MAX: u16 = u16::MAX;
 const KEY_CODE_RETURN: u8 = 10;
@@ -346,8 +346,10 @@ impl Device {
             PRT_VAL => self.print(self.tape_ops[idx + 1]),
             PRTC_REG => self.printc(self.get_reg_content(self.tape_ops[idx + 1])?),
             PRTC_VAL => self.printc(self.tape_ops[idx + 1]),
-            PRT_AREG => self.print(self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?),
-            PRTC_AREG => self.printc(self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?),
+            PRT_AREG => self
+                .print(self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?),
+            PRTC_AREG => self
+                .printc(self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?),
             PRTLN => {
                 self.printer.borrow_mut().newline();
             }
@@ -400,20 +402,19 @@ impl Device {
             )?,
             FILEW_REG_REG => self.write_file_value(
                 self.get_reg_content(self.tape_ops[idx + 1])? as usize,
-                self.get_reg_content(self.tape_ops[idx + 2])?
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             )?,
             FILEW_REG_VAL => self.write_file_value(
                 self.get_reg_content(self.tape_ops[idx + 1])? as usize,
-                self.tape_ops[idx + 2]
+                self.tape_ops[idx + 2],
             )?,
             FILEW_VAL_REG => self.write_file_value(
                 self.tape_ops[idx + 1] as usize,
-                self.get_reg_content(self.tape_ops[idx + 2])?
+                self.get_reg_content(self.tape_ops[idx + 2])?,
             )?,
-            FILEW_VAL_VAL => self.write_file_value(
-                self.tape_ops[idx + 1] as usize,
-                self.tape_ops[idx + 2]
-            )?,
+            FILEW_VAL_VAL => {
+                self.write_file_value(self.tape_ops[idx + 1] as usize, self.tape_ops[idx + 2])?
+            }
             FSEEK_VAL => self.seek_file(self.tape_ops[idx + 1] as usize)?,
             FSKIP_VAL_REG => self.skip_file(
                 self.tape_ops[idx + 1] as usize,
@@ -749,7 +750,7 @@ impl Device {
                         char[0] = 27;
                         break;
                     }
-                    _  => {}
+                    _ => {}
                 }
             }
             event = crossterm::event::read()?;
@@ -874,17 +875,15 @@ impl Device {
     fn write_file_value(&mut self, file_num: usize, value: u8) -> Result<()> {
         match &mut self.files[file_num] {
             None => Err(Error::msg(format!("File {} not open", file_num))),
-            Some(file) => {
-                match file.write(&[value]) {
-                    Ok(count) => {
-                        self.acc = count as u8;
+            Some(file) => match file.write(&[value]) {
+                Ok(count) => {
+                    self.acc = count as u8;
 
-                        file.flush()?;
-                        Ok(())
-                    }
-                    Err(err) => Err(Error::from(err)),
+                    file.flush()?;
+                    Ok(())
                 }
-            }
+                Err(err) => Err(Error::from(err)),
+            },
         }
     }
 
@@ -1098,12 +1097,7 @@ impl Device {
         let data_addr = match areg {
             REG_A0 => self.addr_reg[0],
             REG_A1 => self.addr_reg[1],
-            _ => {
-                return Err(Error::msg(format!(
-                    "Invalid addr register: {:02X}",
-                    areg
-                )))
-            }
+            _ => return Err(Error::msg(format!("Invalid addr register: {:02X}", areg))),
         };
         let rhs = self.get_data_content(data_addr)?;
         match lhs.cmp(&rhs) {
@@ -1150,12 +1144,7 @@ impl Device {
         let data_addr = match areg {
             REG_A0 => self.addr_reg[0],
             REG_A1 => self.addr_reg[1],
-            _ => {
-                return Err(Error::msg(format!(
-                    "Invalid addr register: {:02X}",
-                    areg
-                )))
-            }
+            _ => return Err(Error::msg(format!("Invalid addr register: {:02X}", areg))),
         };
         let data = self.get_data_content(data_addr)?;
         match dest {

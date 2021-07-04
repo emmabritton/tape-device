@@ -50,7 +50,7 @@ jobs:
         run: sudo apt-get update; sudo apt-get install --no-install-recommends pkg-config build-essential
 
       - name: Run cargo clippy --all-targets -- -D clippy::all
-        run: cargo clippy --all-targets -- -D clippy::all -A clippy::ptr_arg
+        run: cargo clippy --all-targets -- -D clippy::all
 
   test:
     runs-on: ubuntu-20.04
@@ -81,13 +81,17 @@ jobs:
         target:
           - x86_64-apple-darwin
           - x86_64-pc-windows-msvc
+          - x86_64-unknown-linux-gnu
         include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-20.04
+            name: tape-device-linux.tar.gz
           - target: x86_64-apple-darwin
             os: macOS-latest
-            name: tape-device-x86_64-apple-darwin.tar.gz
+            name: tape-device-mac.tar.gz
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            name: tape-device-x86_64-pc-windows-msvc.zip
+            name: tape-device-windows.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2

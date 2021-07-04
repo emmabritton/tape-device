@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-pub fn start(basm: &str) -> Result<()> {
+pub fn start(basm: &str, debug: bool) -> Result<()> {
     let path = PathBuf::from(basm);
 
     let output_file_name = if let Some(output_file_stem) = path.file_stem() {
@@ -24,7 +24,7 @@ pub fn start(basm: &str) -> Result<()> {
     let mut output_file_path = PathBuf::from(path.parent().unwrap());
     output_file_path.push(output_file_name);
 
-    let bytes = assemble(read_lines(basm)?, false)?;
+    let bytes = assemble(read_lines(basm)?, debug)?;
 
     let path = output_file_path.to_string_lossy().to_string();
     match File::create(output_file_path) {
@@ -47,7 +47,7 @@ pub fn start(basm: &str) -> Result<()> {
 fn assemble(input: Vec<String>, debug_interpretation: bool) -> Result<Vec<u8>> {
     let program_model = generate_program_model(input)?;
     if debug_interpretation {
-        println!("{:?}", program_model);
+        println!("{:#?}", program_model);
     }
     program_model.validate()?;
     let bytes = generate_byte_code(program_model)?;

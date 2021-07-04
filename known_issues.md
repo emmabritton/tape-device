@@ -3,7 +3,6 @@
 ### Empty Labels
 
 #### Issue
-
 If a program has two labels, e.g.
 ```asm
 label1:

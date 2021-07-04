@@ -104,7 +104,7 @@ fn parse_constant(program_model: &mut ProgramModel, line: &str, line_num: usize)
             line_num
         )));
     }
-    let key = splits[1];
+    let key = splits[1].trim();
     let value = splits[2];
     program_model.validate_key("constant key", key, line_num, false)?;
     let model = ConstantModel::new(key.to_owned(), value.to_owned(), line.to_owned(), line_num);
@@ -114,6 +114,7 @@ fn parse_constant(program_model: &mut ProgramModel, line: &str, line_num: usize)
 
 fn parse_string(program_model: &mut ProgramModel, line: &str, line_num: usize) -> Result<()> {
     return if let Some((key, content)) = line.split_once('=') {
+        let key = key.trim();
         program_model.validate_key("string key", key, line_num, false)?;
         let mut content = content.trim().to_owned();
         if content.is_empty() {
@@ -149,6 +150,7 @@ fn parse_string(program_model: &mut ProgramModel, line: &str, line_num: usize) -
 
 fn parse_data(program_model: &mut ProgramModel, line: &str, line_num: usize) -> Result<()> {
     return if let Some((key, content)) = line.split_once('=') {
+        let key = key.trim();
         program_model.validate_key("data key", key, line_num, false)?;
         let mut parser = DataParser::new();
         let error_msg = format!("Data definition on line {}: \"{}\"", line_num, line);
@@ -174,6 +176,7 @@ fn parse_op(program_model: &mut ProgramModel, orig_line: &str, line_num: usize) 
     }
     if line.contains(':') {
         let (lbl, content) = line.split_once(':').unwrap();
+        let lbl = lbl.trim();
         program_model.validate_key("label", lbl, line_num, true)?;
         let def = Some(Definition::new(orig_line.to_owned(), line_num));
         if program_model.labels.contains_key(lbl) {
@@ -670,6 +673,73 @@ mod test {
                 constant.usage.push(Usage::new(line.to_owned(), num));
             }
             program_model.constants.insert(key.to_owned(), constant);
+        }
+
+        #[test]
+        fn test_label_parsing() {
+            let mut program_model = ProgramModel::new(String::new(), String::new());
+            parse_op(&mut program_model, "lb1: inc acc", 4).unwrap();
+            parse_op(&mut program_model, " lb2: inc acc", 5).unwrap();
+            parse_op(&mut program_model, "lb3 : inc acc", 6).unwrap();
+            parse_op(&mut program_model, "  lb4 : inc acc", 7).unwrap();
+
+            program_model.validate().unwrap();
+
+            assert_eq!(
+                program_model.ops[0],
+                make_op_model_constant(INC_REG, vec![DReg(REG_ACC)], "lb1: inc acc", "inc acc", 4)
+            );
+            assert_eq!(
+                program_model.ops[1],
+                make_op_model_constant(INC_REG, vec![DReg(REG_ACC)], " lb2: inc acc", "inc acc", 5)
+            );
+            assert_eq!(
+                program_model.ops[2],
+                make_op_model_constant(INC_REG, vec![DReg(REG_ACC)], "lb3 : inc acc", "inc acc", 6)
+            );
+            assert_eq!(
+                program_model.ops[3],
+                make_op_model_constant(
+                    INC_REG,
+                    vec![DReg(REG_ACC)],
+                    "  lb4 : inc acc",
+                    "inc acc",
+                    7
+                )
+            );
+            assert_eq!(program_model.labels.len(), 4);
+            assert_eq!(
+                program_model.labels["lb1"],
+                LabelModel::new(
+                    String::from("lb1"),
+                    Some(Definition::new(String::from("lb1: inc acc"), 4)),
+                    vec![]
+                )
+            );
+            assert_eq!(
+                program_model.labels["lb2"],
+                LabelModel::new(
+                    String::from("lb2"),
+                    Some(Definition::new(String::from(" lb2: inc acc"), 5)),
+                    vec![]
+                )
+            );
+            assert_eq!(
+                program_model.labels["lb3"],
+                LabelModel::new(
+                    String::from("lb3"),
+                    Some(Definition::new(String::from("lb3 : inc acc"), 6)),
+                    vec![]
+                )
+            );
+            assert_eq!(
+                program_model.labels["lb4"],
+                LabelModel::new(
+                    String::from("lb4"),
+                    Some(Definition::new(String::from("  lb4 : inc acc"), 7)),
+                    vec![]
+                )
+            );
         }
 
         #[test]

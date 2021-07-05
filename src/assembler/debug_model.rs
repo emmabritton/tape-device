@@ -35,6 +35,7 @@ pub struct DebugLabel {
 }
 
 impl DebugModel {
+    #[allow(dead_code)]
     pub fn new(
         ops: Vec<DebugOp>,
         strings: Vec<DebugDataString>,

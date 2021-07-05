@@ -1,3 +1,4 @@
+mod debug_model;
 mod generator;
 mod parser;
 mod program_model;
@@ -12,19 +13,38 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-pub fn start(basm: &str, debug: bool) -> Result<()> {
+pub fn start(basm: &str, build_debug: bool, debug: bool) -> Result<()> {
     let path = PathBuf::from(basm);
 
-    let output_file_name = if let Some(output_file_stem) = path.file_stem() {
-        format!("{}.tape", output_file_stem.to_string_lossy())
-    } else {
-        eprintln!("Error parsing file name");
-        String::from("output.tape")
-    };
+    let (output_file_name, build_file_name, debug_file_name) =
+        if let Some(output_file_stem) = path.file_stem() {
+            (
+                format!("{}.tape", output_file_stem.to_string_lossy()),
+                format!("{}.build.json", output_file_stem.to_string_lossy()),
+                format!("{}.debug", output_file_stem.to_string_lossy()),
+            )
+        } else {
+            eprintln!("Error parsing file name");
+            (
+                String::from("output.tape"),
+                String::from("output.build.json"),
+                String::from("output.debug"),
+            )
+        };
     let mut output_file_path = PathBuf::from(path.parent().unwrap());
     output_file_path.push(output_file_name);
 
-    let bytes = assemble(read_lines(basm)?, debug)?;
+    let build_file = match build_debug {
+        true => Some(build_file_name),
+        false => None,
+    };
+
+    let debug_file = match debug {
+        true => Some(debug_file_name),
+        false => None,
+    };
+
+    let bytes = assemble(read_lines(basm)?, build_file, debug_file)?;
 
     let path = output_file_path.to_string_lossy().to_string();
     match File::create(output_file_path) {
@@ -44,13 +64,22 @@ pub fn start(basm: &str, debug: bool) -> Result<()> {
     Ok(())
 }
 
-fn assemble(input: Vec<String>, debug_interpretation: bool) -> Result<Vec<u8>> {
+fn assemble(
+    input: Vec<String>,
+    build_file: Option<String>,
+    debug_file: Option<String>,
+) -> Result<Vec<u8>> {
     let program_model = generate_program_model(input)?;
-    if debug_interpretation {
-        println!("{}", serde_json::to_string(&program_model)?);
+    if let Some(path) = build_file {
+        println!("Writing intermediate/interpretation stage to {}", path);
+        std::fs::write(path, serde_json::to_string(&program_model)?)?;
     }
     program_model.validate()?;
-    let bytes = generate_byte_code(program_model)?;
+    let (bytes, debug) = generate_byte_code(program_model)?;
+    if let Some(path) = debug_file {
+        println!("Writing debug data to {}", path);
+        std::fs::write(path, serde_json::to_string(&debug)?)?;
+    }
 
     Ok(bytes)
 }

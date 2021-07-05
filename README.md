@@ -42,6 +42,8 @@ tape-device program.tape [input0] [input1]...
 ```
 tape-device assemble program.basm
 ```
+If you're having build issues add `--save-intermediate` to save the assemblers interpretation
+For the debugger add `--save-debug` to save debug data
 
 **Decompile program**
 ```

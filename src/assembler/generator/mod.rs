@@ -1,3 +1,4 @@
+use crate::assembler::debug_model::{DebugDataString, DebugLabel, DebugModel, DebugOp};
 use crate::assembler::program_model::{
     AddressReplacement, DataModel, LabelModel, OpModel, ProgramModel, StringModel,
 };
@@ -7,25 +8,31 @@ use crate::constants::system::{PRG_VERSION, TAPE_HEADER_1, TAPE_HEADER_2};
 use anyhow::{Error, Result};
 use std::collections::{BTreeMap, HashMap};
 
-pub fn generate_byte_code(program_model: ProgramModel) -> Result<Vec<u8>> {
+pub fn generate_byte_code(program_model: ProgramModel) -> Result<(Vec<u8>, DebugModel)> {
     let mut output = vec![TAPE_HEADER_1, TAPE_HEADER_2, PRG_VERSION];
+    let mut debug_model = DebugModel::default();
     output.push(program_model.name.len() as u8);
     output.extend_from_slice(program_model.name.as_bytes());
     output.push(program_model.version.len() as u8);
     output.extend_from_slice(program_model.version.as_bytes());
 
-    let ops_output =
-        generate_ops_bytes(&program_model.ops, output.len() + 2, program_model.labels)?; //+2 for op byte count written after len is known
+    let ops_output = generate_ops_bytes(
+        &program_model.ops,
+        output.len() + 2,
+        program_model.labels,
+        &mut debug_model,
+    )?; //+2 for op byte count written after len is known
 
     output.extend_from_slice(&(ops_output.bytes.len() as u16).to_be_bytes());
     output.extend_from_slice(&ops_output.bytes);
 
-    let (string_bytes, string_addresses) = generate_string_bytes(program_model.strings)?;
+    let (string_bytes, string_addresses) =
+        generate_string_bytes(program_model.strings, &mut debug_model)?;
 
     output.extend_from_slice(&(string_bytes.len() as u16).to_be_bytes());
     output.extend_from_slice(&string_bytes);
 
-    let (data_bytes, data_addresses) = generate_data_bytes(program_model.data)?;
+    let (data_bytes, data_addresses) = generate_data_bytes(program_model.data, &mut debug_model)?;
 
     output.extend_from_slice(&data_bytes);
 
@@ -33,7 +40,7 @@ pub fn generate_byte_code(program_model: ProgramModel) -> Result<Vec<u8>> {
     output = update_addresses(output, ops_output.data_targets, data_addresses);
     output = update_addresses(output, ops_output.label_targets, ops_output.label_addresses);
 
-    Ok(output)
+    Ok((output, debug_model))
 }
 
 fn update_addresses(
@@ -66,24 +73,25 @@ fn generate_ops_bytes(
     ops: &[OpModel],
     offset: usize,
     labels: HashMap<String, LabelModel>,
+    debug: &mut DebugModel,
 ) -> Result<OpsOutput> {
     let mut labels: BTreeMap<usize, LabelModel> = convert_label_map_to_linenum(labels);
     let mut output = OpsOutput::default();
     for op in ops {
         if !labels.is_empty() {
-            let lbl_line_num = labels
-                .values()
-                .next()
-                .unwrap()
-                .definition
-                .as_ref()
-                .unwrap()
-                .line_num;
+            let lbl = labels.values().next().unwrap();
+            let lbl_line_num = lbl.definition.as_ref().unwrap().line_num;
             if lbl_line_num <= op.line_num {
-                output.label_addresses.insert(
-                    labels.values().next().unwrap().key.clone(),
-                    output.bytes.len() as u16,
-                );
+                let original_line = lbl.definition.as_ref().unwrap().original_line.clone();
+                debug.labels.push(DebugLabel::new(
+                    output.bytes.len(),
+                    lbl.key.clone(),
+                    original_line,
+                    lbl_line_num,
+                ));
+                output
+                    .label_addresses
+                    .insert(lbl.key.clone(), output.bytes.len() as u16);
                 labels.remove(&lbl_line_num);
             }
         }
@@ -101,13 +109,21 @@ fn generate_ops_bytes(
                 .or_insert_with(Vec::new)
                 .push((output.bytes.len() + param_offset + offset) as u16);
         }
+        debug.ops.push(DebugOp::new(
+            output.bytes.len(),
+            op.original_line.clone(),
+            op.line_num,
+            op.after_processing.clone(),
+        ));
         output.bytes.extend_from_slice(&bytes);
     }
 
     Ok(output)
 }
+
 fn generate_data_bytes(
     data: HashMap<String, DataModel>,
+    debug: &mut DebugModel,
 ) -> Result<(Vec<u8>, HashMap<String, u16>)> {
     let mut output = vec![];
     let mut addresses = HashMap::new();
@@ -123,7 +139,13 @@ fn generate_data_bytes(
                 output.len() + data_model.content.len()
             )));
         }
-        addresses.insert(key, output.len() as u16);
+        addresses.insert(key.clone(), output.len() as u16);
+        debug.data.push(DebugDataString::new(
+            output.len(),
+            key,
+            data_model.definition.original_line.clone(),
+            data_model.definition.line_num,
+        ));
         output.extend_from_slice(&data_model.content);
     }
 
@@ -132,6 +154,7 @@ fn generate_data_bytes(
 
 fn generate_string_bytes(
     strings: HashMap<String, StringModel>,
+    debug: &mut DebugModel,
 ) -> Result<(Vec<u8>, HashMap<String, u16>)> {
     let mut output = vec![];
     let mut addresses = HashMap::new();
@@ -147,7 +170,13 @@ fn generate_string_bytes(
                 output.len() + string_model.content.len()
             )));
         }
-        addresses.insert(key, output.len() as u16);
+        addresses.insert(key.clone(), output.len() as u16);
+        debug.strings.push(DebugDataString::new(
+            output.len(),
+            key,
+            string_model.definition.original_line.clone(),
+            string_model.definition.line_num,
+        ));
         output.push(string_model.content.len() as u8);
         output.extend_from_slice(string_model.content.as_bytes());
     }
@@ -205,7 +234,7 @@ mod test {
             StringModel::new(String::new(), String::from("abcdef"), String::new(), 0),
         );
         
-        let (bytes, sources) = generate_string_bytes(strings).unwrap();
+        let (bytes, sources) = generate_string_bytes(strings, &mut DebugModel::default()).unwrap();
         let mut expected = HashMap::new();
         expected.insert(String::from("a"), 0_u16);
         expected.insert(String::from("b"), 12);
@@ -236,7 +265,7 @@ mod test {
             DataModel::new(String::new(), vec![4,2,2,2,2,97,98,99,100,101,102,103,104], String::new(), 0),
         );
 
-        let (bytes, sources) = generate_data_bytes(data).unwrap();
+        let (bytes, sources) = generate_data_bytes(data, &mut DebugModel::default()).unwrap();
         let mut expected = HashMap::new();
         expected.insert(String::from("a"), 0_u16);
         expected.insert(String::from("b"), 10);
@@ -265,7 +294,8 @@ mod test {
                     OpModel::new(LD_AREG_DATA_REG_VAL, vec![AddrReg(REG_A0), DataKey(String::from("bar")), DataReg(REG_D2), Number(10), ], String::new(), String::from("ld a0 bar d2 10"), 0),
                 ],
                 0,
-                HashMap::new()
+                HashMap::new(),
+                &mut DebugModel::default()
             )
             .unwrap();
 

@@ -36,11 +36,20 @@ fn main() -> Result<()> {
                         .required(true),
                 )
                 .arg(
-                    Arg::with_name("debug")
+                    Arg::with_name("build_debug")
                         .help("Print assembler interpretation of program")
                         .takes_value(false)
-                        .long("debug")
-                        .short("d")
+                        .long("--save-intermediate")
+                        .short("-i")
+                        .required(false)
+                        .multiple(false),
+                )
+                .arg(
+                    Arg::with_name("debug")
+                        .help("Output data for debugger")
+                        .takes_value(false)
+                        .long("--save-debug")
+                        .short("-d")
                         .required(false)
                         .multiple(false),
                 ),
@@ -100,6 +109,7 @@ fn main() -> Result<()> {
     } else if let Some(matches) = matches.subcommand_matches("assemble") {
         assembler::start(
             matches.value_of("file").unwrap(),
+            matches.is_present("build_debug"),
             matches.is_present("debug"),
         )?;
     } else if let Some(matches) = matches.subcommand_matches("decompile") {

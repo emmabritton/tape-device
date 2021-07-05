@@ -52,10 +52,6 @@ tape-device decompile program.tape
 
 ## TODO
 
-- [x] change assembler to produce intermediate stage that represents how the compiler is interpreting the program for user to debug build issues
-    - [ ] the output should be usable by a debugger to use to identify source lines, etc
-    - [ ] the output should be persisted if required
-    - [x] build errors should be improved to include source line, interpretation and more detailed error (and suggestion if possible)
 - [ ] gui debugger
     - [ ] register dump
     - [ ] breakpoints

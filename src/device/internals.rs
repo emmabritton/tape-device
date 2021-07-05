@@ -379,7 +379,7 @@ impl Device {
                 addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
             )?,
 
-            FSEEK_REG => self.seek_file(self.get_reg_content(self.tape_ops[idx + 1])? as usize)?,
+            FSEEK_REG => self.seek_file_stack(self.get_reg_content(self.tape_ops[idx + 1])? as usize)?,
             FSKIP_REG_REG => self.skip_file(
                 self.get_reg_content(self.tape_ops[idx + 1])? as usize,
                 self.get_reg_content(self.tape_ops[idx + 2])?,
@@ -818,6 +818,28 @@ impl Device {
         self.files.insert(file_num, Some(file));
 
         Ok(())
+    }
+
+    fn seek_file_stack(&mut self, file_num: usize) -> Result<()> {
+        let mut bytes = [0,0,0,0,0,0,0,0];
+        self.stack_pop(REG_ACC);
+        bytes[4] = self.acc;
+        self.stack_pop(REG_ACC);
+        bytes[5] = self.acc;
+        self.stack_pop(REG_ACC);
+        bytes[6] = self.acc;
+        self.stack_pop(REG_ACC);
+        bytes[7] = self.acc;
+        match &mut self.files[file_num] {
+            None => Err(Error::msg(format!("File {} not open", file_num))),
+            Some(file) => {
+                let addr = u64::from_be_bytes(bytes);
+                match file.seek(SeekFrom::Start(addr)) {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(Error::from(err)),
+                }
+            }
+        }
     }
 
     fn seek_file(&mut self, file_num: usize) -> Result<()> {
@@ -1642,5 +1664,184 @@ mod test {
 
         assert_eq!(printer.borrow().output(), String::from("b99wdhello"));
         assert_eq!(printer.borrow().error_output(), String::new());
+    }
+
+    mod single_op {
+        use super::*;
+
+        fn setup(ops: Vec<u8>) -> (Device, RcBox<dyn Printer>) {
+            let printer = DebugPrinter::new();
+            let device = Device::new(ops, vec![], vec![], vec![], printer.clone());
+
+            assert_eq!(device.dump(), Dump::default());
+
+            (device, printer)
+        }
+
+        fn assert_no_output(printer: RcBox<dyn Printer>) {
+            assert_eq!(printer.borrow().output(), String::new());
+            assert_eq!(printer.borrow().error_output(), String::new());
+        }
+
+        mod add {
+            use super::*;
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_val_no_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
+
+                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_val_acc_no_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
+
+                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_val_init_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
+
+                device.data_reg[0] = 5;
+
+                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 15, data_reg: [5, 0, 0, 0], ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_val_init_acc_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
+
+                device.acc = 5;
+
+                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_val_acc_init_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
+
+                device.acc = 50;
+
+                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 60, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_reg_no_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
+
+                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_reg_acc_no_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
+
+                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_reg_init_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
+
+                device.data_reg[0] = 5;
+
+                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 15, data_reg: [5, 0, 0, 0], ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_reg_init_acc_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
+
+                device.acc = 5;
+
+                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_add_reg_reg_acc_init_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
+
+                device.acc = 50;
+
+                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 60, ..Dump::default() });
+                assert_no_output(printer);
+            }
+        }
+
+        mod sub {
+            use super::*;
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_sub_reg_reg_no_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
+
+                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_sub_reg_val_acc_no_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
+
+                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_sub_reg_val_init_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
+
+                device.data_reg[0] = 5;
+
+                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 15, data_reg: [5,0,0,0], ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_sub_reg_val_init_acc_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
+
+                device.acc = 5;
+
+                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
+                assert_no_output(printer);
+            }
+
+            #[test]
+            #[rustfmt::skip]
+            fn test_sub_reg_val_acc_init_value() {
+                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
+
+                device.acc = 50;
+
+                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 60, ..Dump::default() });
+                assert_no_output(printer);
+            }
+        }
     }
 }

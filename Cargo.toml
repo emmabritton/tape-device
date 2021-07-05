@@ -1,11 +1,17 @@
 [package]
-name = "tape-device"
+name = "tape_device"
 version = "1.0.1"
 description = "Executor, compiler and decompiler for fictional tape device"
 authors = ["Ray Britton <raybritton@gmail.com>"]
 edition = "2018"
 readme = "README.md"
 license-file = "LICENSE"
+
+[[bin]]
+name = "tape_device"
+
+[lib]
+name = "tape_device"
 
 [dependencies]
 anyhow = "1.0.40"

@@ -18,18 +18,17 @@ For example
 Example Program
 1
 .strings
-answer=Answer:
+answer="Answer: "
 .ops
 cpy d0 5
 cpy d1 3
 add d0 d1
 sub acc 1
 prts answer
-prtc ' '
 prt acc
 ```
 
-Results in `Answer:7`
+Results in `Answer: 7`
 
 > :warning: Each section is limited to 65535 bytes
 
@@ -79,7 +78,7 @@ The strings can't be indexed or accessed in any other way
 
 ### Data
 
-The tape file can include byte arrays of data. Each data line must be an array of arrays and must be a max of 255 per sub array and 254 sub arrays. The input can be bytes, characters or strings (that will be converted to a byte array):
+The tape file can include byte arrays of data. Each data line must be an array of arrays and must be a max of 255 bytes per sub array and 254 sub arrays. The input can be bytes, characters or strings (that will be converted to a byte array):
 ```asm
 .data
 squares=[[1,4,9,25,36]]
@@ -128,12 +127,10 @@ If 2nd param is address reg then it must be pointing at the data section
 `INC data_reg|addr_reg`
 
 Increment 1st param
-If 1st param is address reg then it must be pointing at the data section
 
 `DEC data_reg|addr_reg`
 
 Decrement 1st param
-If 1st param is address reg then it must be pointing at the data section
 
 ### Data
 
@@ -145,7 +142,7 @@ data_reg data_reg addr_reg
 addr_reg data_reg data_reg
 addr_reg addr|label
 data_reg num
-data_reg data
+data_reg areg
 ```
 
 Copies values from right to left, in most cases from 2nd param to 1st param. Except with `addr_reg` where it's to/from `addr_reg` and both `data_reg`. 
@@ -205,12 +202,14 @@ Packaged: `02 02 03 0A 0B 61 62 63`
 `PRT data_reg|num|addr_reg`
 
 Print value
-If 1st param is address reg then it must be pointing at the data section
+
+If param is address reg then it must be pointing at the data section
 
 `PRTC data_reg|num|addr_reg`
 
 Print value as character
-If 1st param is address reg then it must be pointing at the data section
+
+If param is address reg then it must be pointing at the data section
 
 `PRTS string_name`
 
@@ -227,6 +226,17 @@ Print `ACC` characters from addr in memory
 `PRTD addr_reg`
 
 Print `ACC` characters from addr in data
+
+General usage:
+```asm
+.data
+text=["an example"]
+.ops
+ld a0 text 0 1   #get addr of length of 'an example'
+cpy acc a0       #load length into acc
+ld a0 text 1 0   #get addr of 'an example'
+prtd a0
+```
 
 ### Comparison
 
@@ -259,11 +269,11 @@ Jump to label if last compared lhs was greater than rhs, based on value in `ACC`
 
 `OVER lbl|addr_reg`
 
-Jump to label if overflow flag set
+Jump to label if overflow flag is set
 
 `NOVER lbl|addr_reg`
 
-Jump to label if overflow flag not set
+Jump to label if overflow flag is not set
 
 ### File
 
@@ -275,17 +285,23 @@ Opens input file <1st param> for reading, populates `D3`-`D0` with file size in 
 
 Reads up to `ACC` bytes from <1st param> file cursor and save at `addr` in memory, populates `ACC` with number of bytes actually read
 
-`FILEW data_reg|num addr|addr_reg`
+`FILEW data_reg|num addr|addr_reg|data_reg|num`
 
-Reads up to `ACC` bytes from memory starting `addr` in memory to <1st param> file cursor, populates `ACC` with number of bytes actually written
+Reads up to `ACC` bytes from memory starting `addr` in memory to <1st param> file cursor or writes literal value from reg or num, populates `ACC` with number of bytes actually written
 
 `FSKIP data_reg|num data_reg`
 
 Skip up to `reg` bytes in <1st param> file, populates `ACC` with number of bytes actually skipped
 
-`FSEEK data_reg|num`
+`FSEEK num`
 
 Move <1st param> file cursor to `[D3][D2][D1][D0]` (0..4294967295)
+
+`FSEEK data_reg`
+
+Move <1st param> file cursor to the latest 4 value in the stack (0..4294967295)
+
+Internally this calls `POP ACC` 4 times, first popped/last pushed is low byte.
 
 `FCHK data_reg|num addr|addr_reg|label`
 
@@ -313,11 +329,11 @@ Invert bits in 1st param
 
 `CALL addr_reg|label|addr`
 
-Jumps to address provided and pushes return address (pc + 1) to stack. 
+Jumps to address provided 
 
 `RET`
 
-Pops last two bytes from stack and jumps to them.
+Jumps to instruction after last executed `CALL`
 
 `PUSH reg|num`
 
@@ -331,11 +347,11 @@ Pop value from stack and populates register.
 
 Get 1 or 2 bytes (depending on if 1st param is reg or addr reg) from 2nd param bytes before the frame pointer
 
-To get first call `ARG <reg> 1`, if the first param 1 byte then the second param is `ARG <reg> 2` otherwise call `ARG <reg> 3` and so on
+To get the first argument call `ARG <reg> 1`, if the first param is 1 byte then the second param is `ARG <reg> 2` otherwise call `ARG <reg> 3` and so on
 
 This instruction does not alter data on the stack or move the SP or FP.
 
-*See stack_example.basm for more info*
+*See examples/stack_example.basm for more info*
 
 ### Input
 

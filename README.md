@@ -35,19 +35,19 @@ See [docs](https://github.com/raybritton/tape-device/blob/master/language.md) fo
 
 **Execute program**
 ```
-tape-device program.tape [input0] [input1]...
+tape_device program.tape [input0] [input1]...
 ```
 
 **Assemble program**
 ```
-tape-device assemble program.basm
+tape_device assemble program.basm
 ```
 If you're having build issues add `--save-intermediate` to save the assemblers interpretation
 For the debugger add `--save-debug` to save debug data
 
 **Decompile program**
 ```
-tape-device decompile program.tape
+tape_device decompile program.tape
 ```
 
 ## TODO

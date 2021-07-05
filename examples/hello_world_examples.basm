@@ -2,7 +2,7 @@ Hello World Examples
 1
 ###
 # Don't forget to run with the .dat
-# e.g. ./tape-device hello_world_examples.tape hello_world_examples.dat
+# e.g. ./tape_device hello_world_examples.tape hello_world_examples.dat
 ###
 .strings
 ex_string=This is from a string in the .strings section:

@@ -85,13 +85,13 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-20.04
-            name: tape-device-linux.tar.gz
+            name: tape_device-linux.tar.gz
           - target: x86_64-apple-darwin
             os: macOS-latest
-            name: tape-device-mac.tar.gz
+            name: tape_device-mac.tar.gz
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            name: tape-device-windows.zip
+            name: tape_device-windows.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
@@ -110,15 +110,15 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          strip tape-device.exe
-          7z a ../../../${{ matrix.name }} tape-device.exe
+          strip tape_device.exe
+          7z a ../../../${{ matrix.name }} tape_device.exe
           cd -
       - name: Prepare build artifacts [-nix]
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          strip tape-device
-          tar cvf ../../../${{ matrix.name }} tape-device
+          strip tape_device
+          tar cvf ../../../${{ matrix.name }} tape_device
           cd -
       - uses: softprops/action-gh-release@v1
         with:

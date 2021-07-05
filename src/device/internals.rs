@@ -185,6 +185,11 @@ impl Device {
                     "PC: {:4} SP: {:4X} FP: {:4X} Overflowed: {}",
                     dump.pc, dump.sp, dump.fp, dump.overflow
                 ));
+                self.elog(&format!(
+                    "Stack ({:4X}..FFFF): {:?}",
+                    dump.sp,
+                    &self.mem[dump.sp as usize..0xFFFF]
+                ));
                 false
             }
         };
@@ -538,6 +543,11 @@ impl Device {
                 self.elog(&format!(
                     "PC: {:4} SP: {:4X} FP: {:4X} Overflowed: {}",
                     dump.pc, dump.sp, dump.fp, dump.overflow
+                ));
+                self.elog(&format!(
+                    "Stack ({:4X}..FFFF): {:?}",
+                    dump.sp,
+                    &self.mem[dump.sp as usize..0xFFFF]
                 ));
             }
             _ => {
@@ -909,7 +919,7 @@ impl Device {
             return Err(Error::msg(format!(
                 "Data access out of bounds {}, max {}",
                 addr + offset1 as u16,
-                self.tape_data.len()
+                self.tape_data[addr as usize]
             )));
         }
         let subarray_count = self.tape_data[addr as usize];

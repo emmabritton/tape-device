@@ -2,9 +2,10 @@ use crate::assembler::{FORMAT_ERROR, KEY_NAME_ERROR};
 use crate::constants::code::{DIVDERS, KEYWORDS, MNEMONICS, REGISTERS};
 use crate::language::parser::params::Param;
 use anyhow::{Error, Result};
+use serde::Serialize;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ProgramModel {
     pub name: String,
     pub version: String,
@@ -15,14 +16,14 @@ pub struct ProgramModel {
     pub labels: HashMap<String, LabelModel>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct LabelModel {
     pub key: String,
     pub definition: Option<Definition>,
     pub usage: Vec<Usage>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct ConstantModel {
     pub key: String,
     pub content: String,
@@ -30,19 +31,19 @@ pub struct ConstantModel {
     pub usage: Vec<Usage>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct Usage {
     pub original_line: String,
     pub line_num: usize,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct Definition {
     pub original_line: String,
     pub line_num: usize,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct StringModel {
     pub key: String,
     pub content: String,
@@ -50,7 +51,7 @@ pub struct StringModel {
     pub usage: Vec<Usage>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct DataModel {
     pub key: String,
     pub content: Vec<u8>,
@@ -58,11 +59,11 @@ pub struct DataModel {
     pub usage: Vec<Usage>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct OpModel {
     pub opcode: u8,
     pub params: Vec<Param>,
-    pub after_constants: String,
+    pub after_processing: String,
     pub original_line: String,
     pub line_num: usize,
 }
@@ -284,7 +285,7 @@ impl OpModel {
         OpModel {
             opcode,
             params,
-            after_constants,
+            after_processing: after_constants,
             original_line,
             line_num,
         }
@@ -331,6 +332,8 @@ impl OpModel {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::constants::code::{JMP_ADDR, LD_AREG_DATA_VAL_VAL, PRTS_STR};
+    use crate::constants::hardware::REG_A1;
 
     #[test]
     fn test_valid_keys() {
@@ -675,5 +678,74 @@ mod test {
                 name
             );
         }
+    }
+
+    #[test]
+    fn check_program_model_json_format() {
+        let mut model = ProgramModel::new(String::from("prog name"), String::from("ver1"));
+        let mut s_model = StringModel::new(
+            String::from("s_key"),
+            String::from("example string"),
+            String::from("s_key=example string"),
+            3,
+        );
+        s_model
+            .usage
+            .push(Usage::new(String::from("prts s_key"), 10));
+        model.strings.insert(String::from("s_key"), s_model);
+        let mut c_model = ConstantModel::new(
+            String::from("foo"),
+            String::from("a1"),
+            String::from("const foo a1"),
+            8,
+        );
+        c_model
+            .usage
+            .push(Usage::new(String::from("ld foo d_key 0 0"), 11));
+        model.constants.insert(String::from("foo"), c_model);
+        let mut d_model = DataModel::new(
+            String::from("d_key"),
+            vec![1, 1, 1],
+            String::from("d_key=[[1]]"),
+            6,
+        );
+        d_model
+            .usage
+            .push(Usage::new(String::from("ld foo d_key 0 0"), 11));
+        model.data.insert(String::from("d_key"), d_model);
+        let l_model = LabelModel::new(
+            String::from("lbl"),
+            Some(Definition::new(String::from("lbl:"), 7)),
+            vec![Usage::new(String::from("jmp lbl"), 12)],
+        );
+        model.labels.insert(String::from("lbl"), l_model);
+        model.ops.push(OpModel::new(
+            PRTS_STR,
+            vec![Param::StrKey(String::from("s_key"))],
+            String::from("prts s_key"),
+            String::from("prts s_key"),
+            10,
+        ));
+        model.ops.push(OpModel::new(
+            LD_AREG_DATA_VAL_VAL,
+            vec![
+                Param::AddrReg(REG_A1),
+                Param::DataKey(String::from("d_key")),
+                Param::Number(0),
+                Param::Number(0),
+            ],
+            String::from("ld a1 d_key 0 0"),
+            String::from("ld foo d_key 0 0"),
+            11,
+        ));
+        model.ops.push(OpModel::new(
+            JMP_ADDR,
+            vec![Param::Label(String::from("lbl"))],
+            String::from("jmp lbl"),
+            String::from("jmp lbl"),
+            12,
+        ));
+
+        assert_eq!(serde_json::to_string(&model).unwrap(), String::from("{\"name\":\"prog name\",\"version\":\"ver1\",\"strings\":{\"s_key\":{\"key\":\"s_key\",\"content\":\"example string\",\"definition\":{\"original_line\":\"s_key=example string\",\"line_num\":3},\"usage\":[{\"original_line\":\"prts s_key\",\"line_num\":10}]}},\"data\":{\"d_key\":{\"key\":\"d_key\",\"content\":[1,1,1],\"definition\":{\"original_line\":\"d_key=[[1]]\",\"line_num\":6},\"usage\":[{\"original_line\":\"ld foo d_key 0 0\",\"line_num\":11}]}},\"constants\":{\"foo\":{\"key\":\"foo\",\"content\":\"a1\",\"definition\":{\"original_line\":\"const foo a1\",\"line_num\":8},\"usage\":[{\"original_line\":\"ld foo d_key 0 0\",\"line_num\":11}]}},\"ops\":[{\"opcode\":147,\"params\":[{\"StrKey\":\"s_key\"}],\"after_processing\":\"prts s_key\",\"original_line\":\"prts s_key\",\"line_num\":10},{\"opcode\":72,\"params\":[{\"AddrReg\":33},{\"DataKey\":\"d_key\"},{\"Number\":0},{\"Number\":0}],\"after_processing\":\"ld a1 d_key 0 0\",\"original_line\":\"ld foo d_key 0 0\",\"line_num\":11},{\"opcode\":32,\"params\":[{\"Label\":\"lbl\"}],\"after_processing\":\"jmp lbl\",\"original_line\":\"jmp lbl\",\"line_num\":12}],\"labels\":{\"lbl\":{\"key\":\"lbl\",\"definition\":{\"original_line\":\"lbl:\",\"line_num\":7},\"usage\":[{\"original_line\":\"jmp lbl\",\"line_num\":12}]}}}"));
     }
 }

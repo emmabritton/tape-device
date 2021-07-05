@@ -47,7 +47,7 @@ pub fn start(basm: &str, debug: bool) -> Result<()> {
 fn assemble(input: Vec<String>, debug_interpretation: bool) -> Result<Vec<u8>> {
     let program_model = generate_program_model(input)?;
     if debug_interpretation {
-        println!("{:#?}", program_model);
+        println!("{}", serde_json::to_string(&program_model)?);
     }
     program_model.validate()?;
     let bytes = generate_byte_code(program_model)?;

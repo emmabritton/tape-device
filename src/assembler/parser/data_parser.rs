@@ -397,13 +397,13 @@ mod test {
             let mut parser = DataParser::new();
             parser.container_mode = ContainerMode::Array;
             parser.handle_array_char('2', 0).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("2"));
             assert_eq!(parser.container_mode, ContainerMode::Array);
             assert_eq!(parser.value_mode, ValueMode::Number);
             assert!(!parser.escaping);
             parser.handle_array_char('0', 1).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("20"));
             assert_eq!(parser.container_mode, ContainerMode::Array);
             assert_eq!(parser.value_mode, ValueMode::Number);
@@ -433,7 +433,7 @@ mod test {
             assert_eq!(parser.value_mode, ValueMode::Hex);
             assert!(!parser.escaping);
             parser.handle_array_char(']', 6).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::new());
             assert_eq!(parser.container_mode, ContainerMode::None);
             assert_eq!(parser.value_mode, ValueMode::None);
@@ -445,19 +445,19 @@ mod test {
         fn simple_number_array() {
             let mut parser = DataParser::new();
             parser.handle_none_char('[', 0).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::new());
             assert_eq!(parser.container_mode, ContainerMode::Array);
             assert_eq!(parser.value_mode, ValueMode::None);
             assert!(!parser.escaping);
             parser.handle_array_char('1', 1).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("1"));
             assert_eq!(parser.container_mode, ContainerMode::Array);
             assert_eq!(parser.value_mode, ValueMode::Number);
             assert!(!parser.escaping);
             parser.handle_array_char('0', 2).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("10"));
             assert_eq!(parser.container_mode, ContainerMode::Array);
             assert_eq!(parser.value_mode, ValueMode::Number);
@@ -481,7 +481,7 @@ mod test {
             assert_eq!(parser.value_mode, ValueMode::Number);
             assert!(!parser.escaping);
             parser.handle_array_char(']', 6).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::new());
             assert_eq!(parser.container_mode, ContainerMode::None);
             assert_eq!(parser.value_mode, ValueMode::None);
@@ -493,25 +493,25 @@ mod test {
         fn test_string() {
             let mut parser = DataParser::new();
             parser.handle_none_char('"', 0).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::new());
             assert_eq!(parser.container_mode, ContainerMode::String);
             assert_eq!(parser.value_mode, ValueMode::None);
             assert!(!parser.escaping);
             parser.handle_string_char('\'', 1).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("'"));
             assert_eq!(parser.container_mode, ContainerMode::String);
             assert_eq!(parser.value_mode, ValueMode::None);
             assert!(!parser.escaping);
             parser.handle_string_char('a', 2).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("'a"));
             assert_eq!(parser.container_mode, ContainerMode::String);
             assert_eq!(parser.value_mode, ValueMode::None);
             assert!(!parser.escaping);
             parser.handle_string_char('"', 3).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::new());
             assert_eq!(parser.container_mode, ContainerMode::None);
             assert_eq!(parser.value_mode, ValueMode::None);
@@ -535,7 +535,7 @@ mod test {
             let mut parser = DataParser::new();
             parser.container_mode = ContainerMode::String;
             parser.handle_string_char('\'', 1).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("'"));
             assert_eq!(parser.container_mode, ContainerMode::String);
             assert_eq!(parser.value_mode, ValueMode::None);
@@ -547,7 +547,7 @@ mod test {
             let mut parser = DataParser::new();
             parser.container_mode = ContainerMode::Array;
             parser.handle_array_char('\'', 1).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("'"));
             assert_eq!(parser.container_mode, ContainerMode::Array);
             assert_eq!(parser.value_mode, ValueMode::Char);
@@ -559,13 +559,13 @@ mod test {
             let mut parser = DataParser::new();
             parser.container_mode = ContainerMode::Array;
             parser.handle_array_char('\'', 0).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("'"));
             assert_eq!(parser.container_mode, ContainerMode::Array);
             assert_eq!(parser.value_mode, ValueMode::Char);
             assert!(!parser.escaping);
             parser.handle_array_char('a', 1).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("'a"));
             assert_eq!(parser.container_mode, ContainerMode::Array);
             assert_eq!(parser.value_mode, ValueMode::Char);
@@ -594,7 +594,7 @@ mod test {
             let mut parser = DataParser::new();
             parser.container_mode = ContainerMode::String;
             parser.handle_string_char(']', 0).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("]"));
             assert_eq!(parser.container_mode, ContainerMode::String);
             assert_eq!(parser.value_mode, ValueMode::None);
@@ -615,7 +615,7 @@ mod test {
             parser.container_mode = ContainerMode::Array;
             parser.current_array = vec![1];
             parser.handle_array_char(']', 0).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::new());
             assert_eq!(parser.container_mode, ContainerMode::None);
             assert_eq!(parser.value_mode, ValueMode::None);
@@ -631,7 +631,7 @@ mod test {
         fn no_mode() {
             let mut parser = DataParser::new();
             parser.handle_none_char('[', 0).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::new());
             assert_eq!(parser.container_mode, ContainerMode::Array);
             assert_eq!(parser.value_mode, ValueMode::None);
@@ -650,7 +650,7 @@ mod test {
             let mut parser = DataParser::new();
             parser.container_mode = ContainerMode::String;
             parser.handle_string_char('[', 0).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("["));
             assert_eq!(parser.container_mode, ContainerMode::String);
             assert_eq!(parser.value_mode, ValueMode::None);
@@ -663,7 +663,7 @@ mod test {
             parser.container_mode = ContainerMode::String;
             parser.escaping = true;
             parser.handle_string_char('[', 1).unwrap();
-            assert_eq!(parser.current_array, vec![]);
+            assert_eq!(parser.current_array, Vec::<u8>::new());
             assert_eq!(parser.current_content, String::from("\\["));
             assert_eq!(parser.container_mode, ContainerMode::String);
             assert_eq!(parser.value_mode, ValueMode::None);

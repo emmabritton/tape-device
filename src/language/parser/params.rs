@@ -1,10 +1,10 @@
 use crate::constants::hardware::*;
 use anyhow::{Error, Result};
-
+use serde::Serialize;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub enum Param {
     Number(u8),
     DataReg(u8),

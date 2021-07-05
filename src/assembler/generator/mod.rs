@@ -320,7 +320,7 @@ mod test {
     #[rustfmt::skip]
     fn test_header() {
         let model = ProgramModel::new(String::from("Test Prog"), String::from("1.0"));
-        let bytes = generate_byte_code(model).unwrap();
+        let (bytes, _) = generate_byte_code(model).unwrap();
 
         assert_eq!(
             bytes,
@@ -342,8 +342,8 @@ mod test {
         model.ops.push(OpModel::new(INC_REG, vec![Param::DataReg(REG_D0)], String::new(), String::from("inc d0"), 0));
         model.ops.push(OpModel::new(CPY_REG_REG, vec![Param::DataReg(REG_D1), Param::DataReg(REG_D0)], String::new(), String::from("cpy d1 d0"), 1));
         model.ops.push(OpModel::new(ADD_REG_REG, vec![Param::DataReg(REG_D0), Param::DataReg(REG_D1)], String::new(), String::from("add d0 d1"), 2));
-        
-        let bytes = generate_byte_code(model).unwrap();
+
+        let (bytes, _) = generate_byte_code(model).unwrap();
         
         assert_eq!(
             bytes,
@@ -371,7 +371,7 @@ mod test {
         model.ops.push(OpModel::new(INC_REG, vec![Param::DataReg(REG_D0)], String::new(), String::from("inc d0"), 0));
         model.ops.push(OpModel::new(PRTS_STR, vec![Param::StrKey(String::from("test"))], String::new(), String::from("prts test"), 1));
 
-        let bytes = generate_byte_code(model).unwrap();
+        let (bytes, _) = generate_byte_code(model).unwrap();
 
         assert_eq!(
             bytes,
@@ -401,7 +401,7 @@ mod test {
         model.ops.push(OpModel::new(INC_REG, vec![Param::DataReg(REG_ACC)], String::new(), String::from("inc acc"), 0));
         model.ops.push(OpModel::new(LD_AREG_DATA_VAL_REG, vec![Param::AddrReg(REG_A0), Param::DataKey(String::from("dk2")), Param::Number(2), Param::DataReg(REG_D3)], String::new(), String::from("ld a0 dk1 2 d3"), 1));
 
-        let bytes = generate_byte_code(model).unwrap();
+        let (bytes, _) = generate_byte_code(model).unwrap();
 
         assert_eq!(
             bytes,
@@ -433,7 +433,7 @@ mod test {
         model.ops.push(OpModel::new(LD_AREG_DATA_VAL_REG, vec![Param::AddrReg(REG_A0), Param::DataKey(String::from("dk1")), Param::Number(2), Param::DataReg(REG_D3)], String::new(), String::from("ld a0 dk1 2 d3"), 1));
         model.ops.push(OpModel::new(PRTS_STR, vec![Param::StrKey(String::from("abc"))], String::new(), String::from("prts abc"), 0));
 
-        let bytes = generate_byte_code(model).unwrap();
+        let (bytes, model) = generate_byte_code(model).unwrap();
 
         assert_eq!(
             bytes,
@@ -450,6 +450,21 @@ mod test {
                 3, 102, 111, 111,
                 3,2,2,4,10,11,50,51,97,98,99,100
             ]
-        )
+        );
+        
+        assert_eq!(
+            model,
+            DebugModel::new(
+                vec![
+                    DebugOp::new(0, String::from("add d0 d1"), 0, String::new()),
+                    DebugOp::new(3, String::from("inc acc"), 0, String::new()),
+                    DebugOp::new(5, String::from("ld a0 dk1 2 d3"), 1, String::new()),
+                    DebugOp::new(11, String::from("prts abc"), 0, String::new()),
+                ], vec![
+                    DebugDataString::new(0, String::from("abc"), String::new(), 0)
+                ], vec![
+                    DebugDataString::new(0, String::from("dk1"), String::new(), 0)
+                ], vec![])
+        );
     }
 }

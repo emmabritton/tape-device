@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Serialize, Debug, Default, PartialEq)]
 pub struct DebugModel {
     pub ops: Vec<DebugOp>,
     pub strings: Vec<DebugDataString>,
@@ -8,7 +8,7 @@ pub struct DebugModel {
     pub labels: Vec<DebugLabel>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct DebugOp {
     byte: usize,
     original_line: String,
@@ -16,7 +16,7 @@ pub struct DebugOp {
     processed_line: String,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct DebugDataString {
     addr: usize,
     key: String,
@@ -25,13 +25,29 @@ pub struct DebugDataString {
     usage: Vec<usize>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct DebugLabel {
     byte: usize,
     name: String,
     original_line: String,
     line_num: usize,
     usage: Vec<usize>,
+}
+
+impl DebugModel {
+    pub fn new(
+        ops: Vec<DebugOp>,
+        strings: Vec<DebugDataString>,
+        data: Vec<DebugDataString>,
+        labels: Vec<DebugLabel>,
+    ) -> Self {
+        DebugModel {
+            ops,
+            strings,
+            data,
+            labels,
+        }
+    }
 }
 
 impl DebugOp {

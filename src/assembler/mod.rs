@@ -136,7 +136,7 @@ mod test {
             "CPY D2 xF",
             "ADD D0 D2",
         ].iter().map(|str| str.to_string()).collect();
-        let bytes = assemble(program, false).unwrap();
+        let bytes = assemble(program, None, None).unwrap();
         
         assert_eq!(bytes,
            vec![
@@ -159,7 +159,7 @@ mod test {
             .map(|s| s.to_owned())
             .collect::<Vec<String>>();
         
-        let bytes  = assemble(program, false).unwrap();
+        let bytes  = assemble(program, None, None).unwrap();
         
         assert_eq!(bytes, vec![
             TAPE_HEADER_1, TAPE_HEADER_2, PRG_VERSION,

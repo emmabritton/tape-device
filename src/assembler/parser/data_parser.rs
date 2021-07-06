@@ -37,6 +37,7 @@ enum ValueMode {
     Number,
     Hex,
     Char,
+    Binary
 }
 
 impl DataParser {
@@ -129,9 +130,32 @@ impl DataParser {
             }
             Err(_) => {
                 return Err(Error::msg(format!(
-                    "Invalid number at char {} (e302)",
+                    "Invalid hex number at char {} (e302)",
                     chr_idx
-                )))
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn finish_binary(&mut self, chr_idx: usize) -> Result<()> {
+        self.value_mode = ValueMode::None;
+        if self.current_content.len() != 8 {
+            return Err(Error::msg(format!(
+                "Invalid binary number at char {} (e314)",
+                chr_idx
+            )));
+        }
+        match u8::from_str_radix(&self.current_content, 2) {
+            Ok(num) => {
+                self.current_array.push(num);
+                self.current_content.clear();
+            }
+            Err(_) => {
+                return Err(Error::msg(format!(
+                    "Invalid binary number at char {} (e313)",
+                    chr_idx
+                )));
             }
         }
         Ok(())
@@ -206,6 +230,10 @@ impl DataParser {
                         self.finish_array(chr_idx)?;
                     }
                 }
+                ValueMode::Binary => {
+                    self.finish_binary(chr_idx)?;
+                    self.finish_array(chr_idx)?;
+                }
                 ValueMode::Number => {
                     self.finish_num(chr_idx)?;
                     self.finish_array(chr_idx)?;
@@ -224,6 +252,7 @@ impl DataParser {
             },
             ',' => match self.value_mode {
                 ValueMode::None => {}
+                ValueMode::Binary => self.finish_binary(chr_idx)?,
                 ValueMode::Number => self.finish_num(chr_idx)?,
                 ValueMode::Hex => self.finish_hex(chr_idx)?,
                 ValueMode::Char => {
@@ -239,7 +268,7 @@ impl DataParser {
                     self.current_content.push('\'');
                     self.value_mode = ValueMode::Char;
                 }
-                ValueMode::Hex | ValueMode::Number => {
+                ValueMode::Hex | ValueMode::Number | ValueMode::Binary => {
                     return Err(Error::msg(format!(
                         "Unexpected ' at char {} (e307)",
                         chr_idx
@@ -263,7 +292,7 @@ impl DataParser {
                 ValueMode::None => {
                     self.value_mode = ValueMode::Hex;
                 }
-                ValueMode::Number | ValueMode::Hex => {
+                ValueMode::Number | ValueMode::Hex | ValueMode::Binary => {
                     return Err(Error::msg(format!(
                         "Unexpected x at char {} (e309)",
                         chr_idx
@@ -276,24 +305,42 @@ impl DataParser {
                     self.current_content.push(chr);
                     self.value_mode = ValueMode::Number;
                 }
-                ValueMode::Number => self.current_content.push(chr),
-                ValueMode::Hex => self.current_content.push(chr),
-                ValueMode::Char => self.current_content.push(chr),
+                ValueMode::Char | ValueMode::Hex | ValueMode::Number => self.current_content.push(chr),
+                ValueMode::Binary => {
+                    if chr == '0' || chr == '1' {
+                        self.current_content.push(chr);
+                    } else {
+                        return Err(Error::msg(format!(
+                            "Unexpected {} at char {} (e312)",
+                            chr, chr_idx
+                        )));
+                    }
+                }
             },
+            'b' => match self.value_mode {
+                ValueMode::None => self.value_mode = ValueMode::Binary,
+                ValueMode::Binary | ValueMode::Number => {
+                    return Err(Error::msg(format!(
+                        "Unexpected {} at char {} (e312)",
+                        chr, chr_idx
+                    )));
+                }
+                ValueMode::Char | ValueMode::Hex => self.current_content.push(chr),
+            }
             'A'..='F' | 'a'..='f' => match self.value_mode {
-                ValueMode::Number | ValueMode::None => {
+                ValueMode::Number | ValueMode::None | ValueMode::Binary => {
                     return Err(Error::msg(format!(
                         "Unexpected {} at char {} (e310)",
                         chr, chr_idx
-                    )))
+                    )));
                 }
-                ValueMode::Hex => self.current_content.push(chr),
-                ValueMode::Char => self.current_content.push(chr),
+                ValueMode::Char | ValueMode::Hex => self.current_content.push(chr),
             },
             ' ' => match self.value_mode {
                 ValueMode::None => { /*ignore whitespace*/ }
                 ValueMode::Number => self.finish_num(chr_idx)?,
                 ValueMode::Hex => self.finish_hex(chr_idx)?,
+                ValueMode::Binary => self.finish_binary(chr_idx)?,
                 ValueMode::Char => {
                     if self.current_content.chars().count() == 3 {
                         self.finish_char(chr_idx)?;
@@ -303,7 +350,7 @@ impl DataParser {
                 }
             },
             _ => match self.value_mode {
-                ValueMode::Number | ValueMode::Hex | ValueMode::None => {
+                ValueMode::Number | ValueMode::Hex | ValueMode::None | ValueMode::Binary => {
                     return Err(Error::msg(format!(
                         "Unexpected {} at char {} (e311)",
                         chr, chr_idx
@@ -382,6 +429,10 @@ mod test {
             let mut parser = DataParser::new();
             parser.run("[[1]]").unwrap();
             assert_eq!(parser.into_bytes().unwrap(), vec![1, 1, 1]);
+
+            let mut parser = DataParser::new();
+            parser.run("[[b00001110]]").unwrap();
+            assert_eq!(parser.into_bytes().unwrap(), vec![1, 1, 14]);
 
             let mut parser = DataParser::new();
             parser.run("[[40, 41]]").unwrap();
@@ -695,6 +746,40 @@ mod test {
             let mut parser = DataParser::new();
             let result = parser.run("[[4, 8, 15 , 16, 23,42],[ 1, 4 ,9, 16, 25, 36 ]");
             assert!(result.is_err());
+        }
+    }
+
+    mod invalid_input {
+        use super::*;
+
+        fn expect_error_binary(chr: char) {
+            let mut parser = DataParser::new();
+            parser.container_mode = ContainerMode::Array;
+            parser.value_mode = ValueMode::Binary;
+
+            parser.handle_array_char('0', 0).unwrap();
+            parser.handle_array_char('1', 0).unwrap();
+            assert!(parser.handle_array_char(chr, 0).is_err(), "{}", chr);
+        }
+
+        fn expect_error_hex(chr: char) {
+            let mut parser = DataParser::new();
+            parser.container_mode = ContainerMode::Array;
+            parser.value_mode = ValueMode::Hex;
+
+            parser.handle_array_char('0', 0).unwrap();
+            parser.handle_array_char('f', 0).unwrap();
+            assert!(parser.handle_array_char(chr, 0).is_err(), "{}", chr);
+        }
+
+        #[test]
+        fn test_invalid_binary() {
+            for i in 'd'..='z' {
+                expect_error_binary(i);
+            }
+            for i in 'D'..='Z' {
+                expect_error_binary(i);
+            }
         }
     }
 }

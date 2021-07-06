@@ -114,6 +114,13 @@ fn parse_number(input: &str) -> Result<Param> {
     let num = if input.starts_with('x') {
         let hex = input.chars().skip(1).collect::<String>();
         u8::from_str_radix(&hex, 16)
+    } else if input.starts_with('b') {
+        if input.len() == 9 {
+            let bin = input.chars().skip(1).collect::<String>();
+            u8::from_str_radix(&bin, 2)
+        } else {
+            return Err(Error::msg(format!("Error parsing number {}: must be b followed all 8 bits", input)));
+        }
     } else if input.len() == 3 && input.starts_with('\'') && input.ends_with('\'') {
         let chr = input.chars().nth(1).unwrap();
         if chr.is_ascii() {
@@ -204,6 +211,12 @@ mod tests {
         assert_eq!(parse_number("'}'").unwrap(), Param::Number(125));
         assert!(parse_number("'s '").is_err());
         assert!(parse_number("''").is_err());
+        assert_eq!(parse_number("b00000000").unwrap(), Param::Number(0));
+        assert_eq!(parse_number("b11111111").unwrap(), Param::Number(255));
+        assert_eq!(parse_number("b00001111").unwrap(), Param::Number(15));
+        assert!(parse_number("b0").is_err());
+        assert!(parse_number("b1").is_err());
+        assert!(parse_number("b101010100111").is_err());
     }
 
     #[test]

@@ -85,6 +85,7 @@ squares=[[1,4,9,25,36]]
 hex=[[x45,xFF]]
 text=["str1", "str2", "str3"] # this is actually [[115, 116, 114, 49], [115...
 letters=["abcdef"]
+bin=[[b00000001,b00000010]]
 .ops
 ```
 
@@ -98,7 +99,7 @@ See `LD` for more information
 
 - `data_reg`: `acc`, `d0`, `d1`, `d2`, `d3`
 - `addr_reg`: `a0`, `a1`  
-- `num`: `0`-`255` or `x0`-`xFF` or ASCII in the form `'c'`
+- `num`: `0`-`255` or `x0`-`xFF` or ASCII char `'c'` or `b00000000`
 - `addr`: `@0`-`@65535` or `@x0`-`@xFFFF` 
 - `lbl`: `[a-zA-Z][a-zA-Z0-9_]*`
 - `data`: `[a-zA-Z][a-zA-Z0-9_]*(\[\d+\])+`

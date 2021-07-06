@@ -16,22 +16,23 @@ use std::time::Duration;
 const SP_MAX: u16 = u16::MAX;
 const KEY_CODE_RETURN: u8 = 10;
 
+//Fields are only public for testing
 pub struct Device {
-    mem: [u8; RAM_SIZE],
+    pub mem: [u8; RAM_SIZE],
     tape_ops: Vec<u8>,
     tape_strings: Vec<u8>,
     tape_data: Vec<u8>,
     data_files: Vec<String>,
     flags: Flags,
     pc: u16,
-    acc: u8,
+    pub acc: u8,
     sp: u16,
     fp: u16,
-    data_reg: [u8; DATA_REG_COUNT],
-    addr_reg: [u16; ADDR_REG_COUNT],
+    pub data_reg: [u8; DATA_REG_COUNT],
+    pub addr_reg: [u16; ADDR_REG_COUNT],
     files: Vec<Option<File>>,
     breakpoints: Vec<u16>,
-    printer: RcBox<dyn Printer>,
+    pub printer: RcBox<dyn Printer>,
     rng: FastRng,
 }
 
@@ -224,16 +225,16 @@ impl Device {
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
-            MEMR_ADDR => self.load(
+            MEMR_ADDR => self.set_data_reg(
                 REG_ACC,
                 self.get_mem(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
             )?,
-            MEMR_AREG => self.load(
+            MEMR_AREG => self.set_data_reg(
                 REG_ACC,
                 self.get_mem(self.get_addr_reg_content(self.tape_ops[idx + 1])?),
             )?,
-            CPY_REG_VAL => self.load(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
-            CPY_REG_REG => self.load(
+            CPY_REG_VAL => self.set_data_reg(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
+            CPY_REG_REG => self.set_data_reg(
                 self.tape_ops[idx + 1],
                 self.get_reg_content(self.tape_ops[idx + 2])?,
             )?,
@@ -564,8 +565,6 @@ impl Device {
         Ok(true)
     }
 
-    ///Returns contents of registers for testing/debugging
-    #[allow(dead_code)]
     pub fn dump(&self) -> Dump {
         Dump {
             pc: self.pc,
@@ -576,36 +575,6 @@ impl Device {
             addr_reg: self.addr_reg,
             overflow: self.flags.overflow,
         }
-    }
-
-    ///Returns value at memory for testing/debugging
-    #[allow(dead_code)]
-    fn assert_mem(&self, addr: u16, value: u8) {
-        assert_eq!(self.mem[addr as usize], value);
-    }
-
-    ///Returns value of sp for testing/debugging
-    #[allow(dead_code)]
-    fn assert_sp(&self, value: u16) {
-        assert_eq!(self.sp, value);
-    }
-
-    ///Returns value of pc for testing/debugging
-    #[allow(dead_code)]
-    fn assert_pc(&self, value: u16) {
-        assert_eq!(self.pc, value);
-    }
-
-    ///Returns value of data reg for testing/debugging
-    #[allow(dead_code)]
-    fn assert_data_reg(&self, reg: u8, value: u8) {
-        assert_eq!(self.get_reg_content(reg).unwrap(), value);
-    }
-
-    ///Returns value of addr reg for testing/debugging
-    #[allow(dead_code)]
-    fn assert_addr_reg(&self, reg: u8, value: u16) {
-        assert_eq!(self.get_addr_reg_content(reg).unwrap(), value);
     }
 
     //Accessors
@@ -633,6 +602,18 @@ impl Device {
         self.mem[addr as usize]
     }
 
+    fn set_data_reg(&mut self, reg: u8, value: u8) -> Result<()> {
+        match reg {
+            REG_ACC => self.acc = value,
+            REG_D0 => self.data_reg[0] = value,
+            REG_D1 => self.data_reg[1] = value,
+            REG_D2 => self.data_reg[2] = value,
+            REG_D3 => self.data_reg[3] = value,
+            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg))),
+        }
+        Ok(())
+    }
+
     //Operations
 
     fn load_addr_reg(&mut self, addr_reg: u8, reg1: u8, reg2: u8) -> Result<()> {
@@ -647,43 +628,15 @@ impl Device {
             }
         }
         .to_be_bytes();
-        match reg1 {
-            REG_ACC => self.acc = bytes[0],
-            REG_D0 => self.data_reg[0] = bytes[0],
-            REG_D1 => self.data_reg[1] = bytes[0],
-            REG_D2 => self.data_reg[2] = bytes[0],
-            REG_D3 => self.data_reg[3] = bytes[0],
-            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg1))),
-        }
-        match reg2 {
-            REG_ACC => self.acc = bytes[1],
-            REG_D0 => self.data_reg[0] = bytes[1],
-            REG_D1 => self.data_reg[1] = bytes[1],
-            REG_D2 => self.data_reg[2] = bytes[1],
-            REG_D3 => self.data_reg[3] = bytes[1],
-            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg2))),
-        }
+        self.set_data_reg(reg1, bytes[0])?;
+        self.set_data_reg(reg2, bytes[1])?;
 
         Ok(())
     }
 
     fn copy_addr_reg(&mut self, addr_reg: u8, reg1: u8, reg2: u8) -> Result<()> {
-        let byte0 = match reg1 {
-            REG_ACC => self.acc,
-            REG_D0 => self.data_reg[0],
-            REG_D1 => self.data_reg[1],
-            REG_D2 => self.data_reg[2],
-            REG_D3 => self.data_reg[3],
-            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg1))),
-        };
-        let byte1 = match reg2 {
-            REG_ACC => self.acc,
-            REG_D0 => self.data_reg[0],
-            REG_D1 => self.data_reg[1],
-            REG_D2 => self.data_reg[2],
-            REG_D3 => self.data_reg[3],
-            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg2))),
-        };
+        let byte0 = self.get_reg_content(reg1)?;
+        let byte1 = self.get_reg_content(reg2)?;
         let addr = u16::from_be_bytes([byte0, byte1]);
         match addr_reg {
             REG_A0 => self.addr_reg[0] = addr,
@@ -767,14 +720,7 @@ impl Device {
         }
         crossterm::terminal::disable_raw_mode()?;
 
-        match reg {
-            REG_ACC => self.acc = char[0],
-            REG_D0 => self.data_reg[0] = char[0],
-            REG_D1 => self.data_reg[1] = char[0],
-            REG_D2 => self.data_reg[2] = char[0],
-            REG_D3 => self.data_reg[3] = char[0],
-            _ => return Err(Error::msg(format!("Invalid data register: {:02X}", reg))),
-        }
+        self.set_data_reg(reg, char[0])?;
 
         Ok(())
     }
@@ -822,13 +768,13 @@ impl Device {
 
     fn seek_file_stack(&mut self, file_num: usize) -> Result<()> {
         let mut bytes = [0,0,0,0,0,0,0,0];
-        self.stack_pop(REG_ACC);
+        self.stack_pop(REG_ACC)?;
         bytes[4] = self.acc;
-        self.stack_pop(REG_ACC);
+        self.stack_pop(REG_ACC)?;
         bytes[5] = self.acc;
-        self.stack_pop(REG_ACC);
+        self.stack_pop(REG_ACC)?;
         bytes[6] = self.acc;
-        self.stack_pop(REG_ACC);
+        self.stack_pop(REG_ACC)?;
         bytes[7] = self.acc;
         match &mut self.files[file_num] {
             None => Err(Error::msg(format!("File {} not open", file_num))),
@@ -1044,14 +990,7 @@ impl Device {
 
     fn rand(&mut self, reg: u8) -> Result<()> {
         let num = self.rng.get_u8();
-        match reg {
-            REG_ACC => self.acc = num,
-            REG_D0 => self.data_reg[0] = num,
-            REG_D1 => self.data_reg[1] = num,
-            REG_D2 => self.data_reg[2] = num,
-            REG_D3 => self.data_reg[3] = num,
-            _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
-        };
+        self.set_data_reg(reg, num)?;
         Ok(())
     }
 
@@ -1160,18 +1099,6 @@ impl Device {
         self.acc = value;
     }
 
-    fn load(&mut self, dest: u8, value: u8) -> Result<()> {
-        match dest {
-            REG_ACC => self.acc = value,
-            REG_D0 => self.data_reg[0] = value,
-            REG_D1 => self.data_reg[1] = value,
-            REG_D2 => self.data_reg[2] = value,
-            REG_D3 => self.data_reg[3] = value,
-            _ => return Err(Error::msg(format!("Invalid register: {:02X}", dest))),
-        }
-        Ok(())
-    }
-
     fn load_data(&mut self, dest: u8, areg: u8) -> Result<()> {
         let data_addr = match areg {
             REG_A0 => self.addr_reg[0],
@@ -1179,14 +1106,7 @@ impl Device {
             _ => return Err(Error::msg(format!("Invalid addr register: {:02X}", areg))),
         };
         let data = self.get_data_content(data_addr)?;
-        match dest {
-            REG_ACC => self.acc = data,
-            REG_D0 => self.data_reg[0] = data,
-            REG_D1 => self.data_reg[1] = data,
-            REG_D2 => self.data_reg[2] = data,
-            REG_D3 => self.data_reg[3] = data,
-            _ => return Err(Error::msg(format!("Invalid register: {:02X}", dest))),
-        }
+        self.set_data_reg(dest, data)?;
         Ok(())
     }
 
@@ -1343,505 +1263,3 @@ fn addr(byte1: u8, byte2: u8) -> u16 {
     u16::from_be_bytes([byte1, byte2])
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::constants::compare::{EQUAL, LESSER};
-    use crate::constants::hardware::REG_ACC;
-    use crate::printer::DebugPrinter;
-
-    fn assert_step_device(name: &str, device: &mut Device, dump: Dump) {
-        if !device.step() {
-            eprintln!("{}", device.printer.borrow().error_output());
-            panic!("step for {}", name);
-        }
-        assert_eq!(device.dump(), dump, "dump for {}", name);
-    }
-
-    #[test]
-    #[rustfmt::skip]
-    fn test_simple() {
-        let ops = vec![
-            PRT_REG,
-            REG_D0,
-            INC_REG,
-            REG_D0,
-            CMP_REG_VAL,
-            REG_D0,
-            2,
-            JNE_ADDR,
-            0,
-            0,
-            HALT,
-        ];
-        let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], vec![], vec![],printer.clone());
-
-        assert_eq!(device.dump(), Dump::default());
-
-        assert_step_device("PRT D0", &mut device, Dump { pc: 2, ..Dump::default() }, );
-        assert_eq!(printer.borrow().output(), String::from("0"));
-
-        assert_step_device("INC D0", &mut device, Dump { pc: 4, data_reg: [1, 0, 0, 0], ..Dump::default() }, );
-        assert_eq!(printer.borrow().output(), String::from("0"));
-
-        assert_step_device("CMP D0 2", &mut device, Dump { pc: 7, acc: LESSER, data_reg: [1, 0, 0, 0], ..Dump::default() }, );
-        assert_eq!(printer.borrow().output(), String::from("0"));
-
-        assert_step_device("JNE @0", &mut device, Dump { pc: 0, acc: LESSER, data_reg: [1, 0, 0, 0], ..Dump::default() }, );
-        assert_eq!(printer.borrow().output(), String::from("0"));
-
-        assert_step_device("PRT D0", &mut device, Dump { pc: 2, acc: LESSER, data_reg: [1, 0, 0, 0], ..Dump::default() }, );
-        assert_eq!(printer.borrow().output(), String::from("01"));
-
-        assert_step_device("INC D0", &mut device, Dump { pc: 4, acc: LESSER, data_reg: [2, 0, 0, 0], ..Dump::default() }, );
-        assert_eq!(printer.borrow().output(), String::from("01"));
-
-        assert_step_device("CMP D0 2", &mut device, Dump { pc: 7, acc: EQUAL, data_reg: [2, 0, 0, 0], ..Dump::default() }, );
-        assert_eq!(printer.borrow().output(), String::from("01"));
-
-        assert_step_device("JNE @0", &mut device, Dump { pc: 10, acc: EQUAL, data_reg: [2, 0, 0, 0], ..Dump::default() }, );
-        assert_eq!(printer.borrow().output(), String::from("01"));
-
-        //HALT
-        assert!(!device.step());
-        assert_eq!(device.dump(), Dump { pc: 10, acc: EQUAL, data_reg: [2, 0, 0, 0], ..Dump::default() });
-        assert_eq!(printer.borrow().output(), String::from("01"));
-        assert_eq!(printer.borrow().error_output(), String::new());
-    }
-
-    #[test]
-    #[rustfmt::skip]
-    fn test_overflow_flag() {
-        let ops = vec![
-            DEC_REG, REG_D0, DEC_REG, REG_D0, INC_REG, REG_D0, INC_REG, REG_D0, DEC_REG, REG_A0,
-            DEC_REG, REG_A0,
-        ];
-        let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], vec![], vec![],printer.clone());
-
-        assert_eq!(device.dump(), Dump::default());
-
-        assert_step_device("DEC D0", &mut device, Dump { pc: 2, data_reg: [255, 0, 0, 0], overflow: true, ..Dump::default() }, );
-        assert_step_device("DEC D0", &mut device, Dump { pc: 4, data_reg: [254, 0, 0, 0], ..Dump::default() }, );
-        assert_step_device("INC D0", &mut device, Dump { pc: 6, data_reg: [255, 0, 0, 0], ..Dump::default() },);
-        assert_step_device("INC D0", &mut device, Dump { pc: 8, overflow: true, ..Dump::default() }, );
-        assert_step_device("DEC A0", &mut device, Dump { pc: 10, addr_reg: [65535, 0], overflow: true, ..Dump::default() },);
-        assert_step_device("DEC A0", &mut device, Dump { pc: 12, addr_reg: [65534, 0], ..Dump::default() }, );
-
-        assert_eq!(printer.borrow().output(), String::new());
-        assert_eq!(printer.borrow().error_output(), String::new());
-    }
-
-    #[test]
-    #[rustfmt::skip]
-    fn test_registers() {
-        let ops = vec![
-            INC_REG, REG_A0, INC_REG, REG_A1, INC_REG, REG_D0, INC_REG, REG_D1, INC_REG, REG_D2, INC_REG, REG_D3, INC_REG, REG_ACC,
-            DEC_REG, REG_A0, DEC_REG, REG_A1, DEC_REG, REG_D0, DEC_REG, REG_D1, DEC_REG, REG_D2, DEC_REG, REG_D3, DEC_REG, REG_ACC,
-            CPY_REG_VAL, REG_D0, 5,CPY_REG_VAL, REG_D1, 5, CPY_REG_VAL, REG_D2, 5,CPY_REG_VAL, REG_D3, 5,CPY_REG_VAL, REG_ACC, 5
-        ];
-        let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], vec![], vec![],printer.clone());
-
-        assert_eq!(device.dump(), Dump::default());
-
-        assert_step_device("INC A0", &mut device,Dump{pc:2, addr_reg:[1,0],..Dump::default()});
-        assert_step_device("INC A1", &mut device,Dump{pc:4, addr_reg:[1,1],..Dump::default()});
-        assert_step_device("INC D0", &mut device,Dump{pc:6, addr_reg:[1,1], data_reg: [1,0,0,0],..Dump::default()});
-        assert_step_device("INC D1", &mut device,Dump{pc:8, addr_reg:[1,1], data_reg: [1,1,0,0],..Dump::default()});
-        assert_step_device("INC D2", &mut device,Dump{pc:10, addr_reg:[1,1], data_reg: [1,1,1,0],..Dump::default()});
-        assert_step_device("INC D3", &mut device,Dump{pc:12, addr_reg:[1,1], data_reg: [1,1,1,1], ..Dump::default()});
-        assert_step_device("INC ACC", &mut device,Dump{pc:14, addr_reg:[1,1], data_reg: [1,1,1,1], acc: 1,..Dump::default()});
-        assert_step_device("DEC A0", &mut device,Dump{pc:16, addr_reg:[0,1], data_reg: [1,1,1,1], acc: 1,..Dump::default()});
-        assert_step_device("DEC A1", &mut device,Dump{pc:18, data_reg: [1,1,1,1], acc: 1,..Dump::default()});
-        assert_step_device("DEC D0", &mut device,Dump{pc:20, data_reg: [0,1,1,1], acc: 1,..Dump::default()});
-        assert_step_device("DEC D1", &mut device,Dump{pc:22, data_reg: [0,0,1,1], acc: 1,..Dump::default()});
-        assert_step_device("DEC D2", &mut device,Dump{pc:24, data_reg: [0,0,0,1], acc: 1,..Dump::default()});
-        assert_step_device("DEC D3", &mut device,Dump{pc:26, acc: 1,..Dump::default()});
-        assert_step_device("DEC ACC", &mut device,Dump{pc:28,..Dump::default()});
-        assert_step_device("CPY D0 5", &mut device,Dump{pc:31, data_reg:[5,0,0,0],..Dump::default()});
-        assert_step_device("CPY D1 5", &mut device,Dump{pc:34, data_reg:[5,5,0,0],..Dump::default()});
-        assert_step_device("CPY D2 5", &mut device,Dump{pc:37, data_reg:[5,5,5,0],..Dump::default()});
-        assert_step_device("CPY D3 5", &mut device,Dump{pc:40, data_reg:[5,5,5,5],..Dump::default()});
-        assert_step_device("CPY ACC 5", &mut device,Dump{pc:43, data_reg:[5,5,5,5], acc:5,..Dump::default()});
-
-        assert_eq!(printer.borrow().output(), String::new());
-        assert_eq!(printer.borrow().error_output(), String::new());
-    }
-
-    #[test]
-    #[rustfmt::skip]
-    fn test_swapping() {
-        let ops = vec![
-            CPY_REG_VAL, REG_D0, 10,
-            SWP_REG_REG, REG_D0, REG_D1,
-            SWP_REG_REG, REG_D1, REG_D2,
-            SWP_REG_REG, REG_D2, REG_D3,
-            SWP_REG_REG, REG_D3, REG_ACC,
-            CPY_AREG_ADDR, REG_A0, 0xF, 0xFF,
-            SWP_AREG_AREG, REG_A0, REG_A1
-        ];
-
-        let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], vec![], vec![],printer.clone());
-
-        assert_eq!(device.dump(), Dump::default());
-        assert_step_device("PUSH D0 10", &mut device, Dump {pc: 3,data_reg:[10,0,0,0],..Dump::default()});
-        assert_step_device("SWP D0 D1", &mut device, Dump {pc: 6,data_reg:[0,10,0,0],..Dump::default()});
-        assert_step_device("SWP D1 D2", &mut device, Dump {pc: 9,data_reg:[0,0,10,0],..Dump::default()});
-        assert_step_device("SWP D2 D3", &mut device, Dump {pc: 12,data_reg:[0,0,0,10],..Dump::default()});
-        assert_step_device("SWP D3 ACC", &mut device, Dump {pc: 15,acc:10,..Dump::default()});
-        assert_step_device("CPY A0 @0xFFF", &mut device, Dump {pc: 19,acc:10,addr_reg:[4095, 0],..Dump::default()});
-        assert_step_device("SWP A0 A1", &mut device, Dump {pc: 22,acc:10,addr_reg:[0, 4095],..Dump::default()});
-    }
-
-    #[test]
-    #[rustfmt::skip]
-    fn test_stack_pushpop() {
-        let ops = vec![
-            PUSH_VAL, 5, 
-            CPY_REG_VAL, REG_ACC, 10, 
-            PUSH_REG, REG_ACC, 
-            POP_REG, REG_D1,
-            CALL_ADDR, 0,15,
-            POP_REG, REG_D3,
-            HALT,
-            /*method @15*/ARG_REG_VAL,REG_D2,1,
-            RET,
-        ];
-        let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], vec![],vec![], printer.clone());
-
-        assert_eq!(device.dump(), Dump::default());
-        device.assert_mem(SP_MAX-1 , 0);
-        device.assert_mem(SP_MAX-2, 0);
-        
-        assert_step_device("PUSH 5", &mut device, Dump {pc: 2,sp:SP_MAX - 1,..Dump::default()});
-        device.assert_mem(SP_MAX-1, 5);
-        assert_step_device("CPY ACC 10", &mut device, Dump {pc: 5,sp:SP_MAX - 1,acc:10,..Dump::default()});
-        assert_step_device("PUSH ACC", &mut device, Dump {pc: 7,sp:SP_MAX - 2,acc:10,..Dump::default()});
-        device.assert_mem(SP_MAX-1, 5);
-        device.assert_mem(SP_MAX - 2, 10);
-        assert_step_device("POP D1", &mut device, Dump {pc: 9,sp:SP_MAX - 1,acc:10,data_reg:[0,10,0,0],..Dump::default()});
-        device.assert_mem(SP_MAX-1, 5);
-        assert_step_device("CALL @13", &mut device, Dump {pc: 15,sp:SP_MAX - 5,acc:10,data_reg:[0,10,0,0],fp:65530,..Dump::default()});
-        device.assert_mem(SP_MAX-1, 5);
-        device.assert_mem(SP_MAX-2, 0xff);
-        device.assert_mem(SP_MAX-3, 0xff);
-        device.assert_mem(SP_MAX-4, 0);
-        device.assert_mem(SP_MAX-5, 12);
-        assert_step_device("ARG D2 0", &mut device, Dump {pc: 18,sp:SP_MAX - 5,acc:10,data_reg:[0,10,5,0],fp:65530,..Dump::default()});
-        assert_step_device("RET", &mut device, Dump {pc: 12,sp:SP_MAX - 1,acc:10,data_reg:[0,10,5,0],fp:SP_MAX,..Dump::default()});
-        device.assert_mem(SP_MAX-1, 5);
-        device.assert_mem(SP_MAX-2, 0xff);
-        device.assert_mem(SP_MAX-3, 0xff);
-        device.assert_mem(SP_MAX-4, 0);
-        device.assert_mem(SP_MAX-5, 12);
-        assert_step_device("POP D3", &mut device, Dump {pc: 14,sp:SP_MAX,acc:10,data_reg:[0,10,5,5],fp:SP_MAX,..Dump::default()});
-        device.assert_mem(SP_MAX-1, 5);
-
-        assert_eq!(printer.borrow().output(), String::new());
-        assert_eq!(printer.borrow().error_output(), String::new());
-    }
-
-    #[test]
-    #[rustfmt::skip]
-    fn test_simple_data() {
-        let ops = vec![
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 0, 0,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 0, 1,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 1, 0,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            PRTC_AREG, REG_A0,
-            PRTC_REG, REG_ACC,
-            PRT_AREG, REG_A0,
-            PRT_REG, REG_ACC
-        ];
-
-        let printer = DebugPrinter::new();
-        let mut device = Device::new(ops, vec![], vec![1, 2, 97, 15], vec![], printer.clone());
-
-        assert_eq!(device.dump(), Dump::default());
-
-        assert_step_device("LD A0 @0 0 0", &mut device, Dump { pc: 6, ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 9, acc: 1, ..Dump::default() });
-        assert_step_device("LD A0 @0 0 1", &mut device, Dump { pc: 15, acc: 1, addr_reg: [1, 0], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 18, acc: 2, addr_reg: [1, 0], ..Dump::default() });
-        assert_step_device("LD A0 @0 1 0", &mut device, Dump { pc: 24, acc: 2, addr_reg: [2, 0], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 27, acc: 97, addr_reg: [2, 0], ..Dump::default() });
-        assert_step_device("PRTC A0", &mut device, Dump { pc: 29, acc: 97, addr_reg: [2, 0], ..Dump::default() });
-        assert_step_device("PRTC ACC", &mut device, Dump { pc: 31, acc: 97, addr_reg: [2, 0], ..Dump::default() });
-        assert_step_device("PRT A0", &mut device, Dump { pc: 33, acc: 97, addr_reg: [2, 0], ..Dump::default() });
-        assert_step_device("PRT ACC", &mut device, Dump { pc: 35, acc: 97, addr_reg: [2, 0], ..Dump::default() });
-
-        assert_eq!(printer.borrow().output(), String::from("aa9797"));
-        assert_eq!(printer.borrow().error_output(), String::new());
-    }
-
-    #[test]
-    #[rustfmt::skip]
-    fn test_complex_data() {
-        let ops = vec![
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 0, 0,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 0, 0, 1,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 5, 0, 0,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 5, 0, 1,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 5, 0, 2,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 0, 0,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 0, 1,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 0, 2,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A1, 0, 0, 1, 1,
-            PRTC_AREG, REG_A1,
-            LD_AREG_DATA_VAL_VAL, REG_A1, 0, 0, 1, 2,
-            PRT_AREG, REG_A1,
-            LD_AREG_DATA_VAL_VAL, REG_A1, 0, 12, 2, 0,
-            PRTC_AREG, REG_A1,
-            LD_AREG_DATA_VAL_VAL, REG_A1, 0, 12, 2, 4,
-            PRTC_AREG, REG_A1,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 0, 1,
-            CPY_REG_AREG, REG_ACC, REG_A0,
-            LD_AREG_DATA_VAL_VAL, REG_A0, 0, 12, 1, 0,
-            PRTD_AREG, REG_A0
-        ];
-
-        let printer = DebugPrinter::new();
-        //.data
-        //text=["abc"]
-        //lists=[[20,30],[50,51]]
-        //chars=[['h','e','l','l','o'],['w','o','r','l','d']]
-        let mut device = Device::new(ops,
-                                     vec![],
-                                     vec![1, 3, 97, 98, 99, 2, 2, 2, 20, 30, 50, 51, 2, 5, 5, 104, 101, 108, 108, 111, 119, 111, 114, 108, 100],
-                                     vec![],
-                                     printer.clone());
-
-        assert_eq!(device.dump(), Dump::default());
-
-        assert_step_device("LD A0 text 0 0", &mut device, Dump { pc: 6, ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 9, acc: 1, ..Dump::default() });
-        assert_step_device("LD A0 text 0 1", &mut device, Dump { pc: 15, acc: 1, addr_reg: [1, 0], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 18, acc: 3, addr_reg: [1, 0], ..Dump::default() });
-
-        assert_step_device("LD A0 lists 0 0", &mut device, Dump { pc: 24, acc: 3, addr_reg: [5, 0], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 27, acc: 2, addr_reg: [5, 0], ..Dump::default() });
-        assert_step_device("LD A0 lists 0 1", &mut device, Dump { pc: 33, acc: 2, addr_reg: [6, 0], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 36, acc: 2, addr_reg: [6, 0], ..Dump::default() });
-        assert_step_device("LD A0 lists 0 2", &mut device, Dump { pc: 42, acc: 2, addr_reg: [7, 0], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 45, acc: 2, addr_reg: [7, 0], ..Dump::default() });
-
-        assert_step_device("LD A0 chars 0 0", &mut device, Dump { pc: 51, acc: 2, addr_reg: [12, 0], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 54, acc: 2, addr_reg: [12, 0], ..Dump::default() });
-        assert_step_device("LD A0 chars 0 1", &mut device, Dump { pc: 60, acc: 2, addr_reg: [13, 0], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 63, acc: 5, addr_reg: [13, 0], ..Dump::default() });
-        assert_step_device("LD A0 chars 0 2", &mut device, Dump { pc: 69, acc: 5, addr_reg: [14, 0], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 72, acc: 5, addr_reg: [14, 0], ..Dump::default() });
-
-        assert_step_device("LD A1 text 1 1", &mut device, Dump { pc: 78, acc: 5, addr_reg: [14, 3], ..Dump::default() });
-        assert_step_device("PRTC A1", &mut device, Dump { pc: 80, acc: 5, addr_reg: [14, 3], ..Dump::default() });
-        assert_step_device("LD A1 text 1 2", &mut device, Dump { pc: 86, acc: 5, addr_reg: [14, 4], ..Dump::default() });
-        assert_step_device("PRT A1", &mut device, Dump { pc: 88, acc: 5, addr_reg: [14, 4], ..Dump::default() });
-
-        assert_step_device("LD A1 chars 2 0", &mut device, Dump { pc: 94, acc: 5, addr_reg: [14, 20], ..Dump::default() });
-        assert_step_device("PRTC A1", &mut device, Dump { pc: 96, acc: 5, addr_reg: [14, 20], ..Dump::default() });
-        assert_step_device("LD A1 chars 2 4", &mut device, Dump { pc: 102, acc: 5, addr_reg: [14, 24], ..Dump::default() });
-        assert_step_device("PRT A1", &mut device, Dump { pc: 104, acc: 5, addr_reg: [14, 24], ..Dump::default() });
-
-        assert_step_device("LD A0 chars 0 1", &mut device, Dump { pc: 110, acc: 5, addr_reg: [13, 24], ..Dump::default() });
-        assert_step_device("CPY ACC A0", &mut device, Dump { pc: 113, acc: 5, addr_reg: [13, 24], ..Dump::default() });
-        assert_step_device("LD A0 chars 1 0", &mut device, Dump { pc: 119, acc: 5, addr_reg: [15, 24], ..Dump::default() });
-        assert_step_device("PRTD A0", &mut device, Dump { pc: 121, acc: 5, addr_reg: [15, 24], ..Dump::default() });
-
-        assert_eq!(printer.borrow().output(), String::from("b99wdhello"));
-        assert_eq!(printer.borrow().error_output(), String::new());
-    }
-
-    mod single_op {
-        use super::*;
-
-        fn setup(ops: Vec<u8>) -> (Device, RcBox<dyn Printer>) {
-            let printer = DebugPrinter::new();
-            let device = Device::new(ops, vec![], vec![], vec![], printer.clone());
-
-            assert_eq!(device.dump(), Dump::default());
-
-            (device, printer)
-        }
-
-        fn assert_no_output(printer: RcBox<dyn Printer>) {
-            assert_eq!(printer.borrow().output(), String::new());
-            assert_eq!(printer.borrow().error_output(), String::new());
-        }
-
-        mod add {
-            use super::*;
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_val_no_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
-
-                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_val_acc_no_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
-
-                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_val_init_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
-
-                device.data_reg[0] = 5;
-
-                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 15, data_reg: [5, 0, 0, 0], ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_val_init_acc_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
-
-                device.acc = 5;
-
-                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_val_acc_init_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
-
-                device.acc = 50;
-
-                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 60, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_reg_no_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
-
-                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_reg_acc_no_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
-
-                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_reg_init_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
-
-                device.data_reg[0] = 5;
-
-                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 15, data_reg: [5, 0, 0, 0], ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_reg_init_acc_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
-
-                device.acc = 5;
-
-                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_add_reg_reg_acc_init_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
-
-                device.acc = 50;
-
-                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 60, ..Dump::default() });
-                assert_no_output(printer);
-            }
-        }
-
-        mod sub {
-            use super::*;
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_sub_reg_reg_no_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
-
-                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_sub_reg_val_acc_no_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
-
-                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_sub_reg_val_init_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
-
-                device.data_reg[0] = 5;
-
-                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 15, data_reg: [5,0,0,0], ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_sub_reg_val_init_acc_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_D0, 10]);
-
-                device.acc = 5;
-
-                assert_step_device("ADD D0 10", &mut device, Dump { pc: 3, acc: 10, ..Dump::default() });
-                assert_no_output(printer);
-            }
-
-            #[test]
-            #[rustfmt::skip]
-            fn test_sub_reg_val_acc_init_value() {
-                let (mut device, printer) = setup(vec![ADD_REG_VAL, REG_ACC, 10]);
-
-                device.acc = 50;
-
-                assert_step_device("ADD ACC 10", &mut device, Dump { pc: 3, acc: 60, ..Dump::default() });
-                assert_no_output(printer);
-            }
-        }
-    }
-}

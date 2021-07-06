@@ -774,11 +774,27 @@ mod test {
 
         #[test]
         fn test_invalid_binary() {
-            for i in 'd'..='z' {
+            for i in 'a'..='z' {
                 expect_error_binary(i);
             }
-            for i in 'D'..='Z' {
+            for i in 'A'..='Z' {
                 expect_error_binary(i);
+            }
+            for i in '2'..='9' {
+                expect_error_binary(i);
+            }
+            expect_error_binary(' ');
+            expect_error_binary(']');
+            expect_error_binary(',');
+        }
+
+        #[test]
+        fn test_invalid_hex() {
+            for i in 'g'..='z' {
+                expect_error_hex(i);
+            }
+            for i in 'G'..='Z' {
+                expect_error_hex(i);
             }
         }
     }

@@ -10,7 +10,7 @@ pub mod parser;
 lazy_static! {
     //finds groups of non whitespace or chars
     //eg prtc @xAF 10 label 'a' ' '
-    static ref LINE_REGEX: Regex = Regex::new("(?:@?\\w)+|'.'").unwrap();
+    static ref LINE_REGEX: Regex = Regex::new("'.'|(?:\\S)+").unwrap();
 }
 
 ///This method converts a BASM instruction into usable parts for the assembler

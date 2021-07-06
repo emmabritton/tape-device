@@ -16,7 +16,7 @@ contexts:
         1: comment.basm
     - match: '[a-zA-Z0-9_]+:'
       scope: constant.numeric.basm
-    - match: '(?i)\b(filer|debug|filew|inc|dec|ret|memp|arg|push|pop|rand|seed|time|ld|rchr|rstr|prtc|prt|const|fopen|prtln|fseek|nop|halt|fread|memw|memr|fwrite|prts|prtd|add|sub|cmp|cpy)\b'
+    - match: '(?i)\b(filer|debug|filew|inc|dec|ret|memp|arg|push|pop|rand|seed|time|ld|rchr|rstr|prtc|prt|const|fopen|prtln|fseek|nop|halt|fread|memw|memr|fwrite|prts|prtd|add|sub|cmp|cpy|and|or|xor|not)\b'
       scope: keyword.structure.basm
     - match: '(?i)\b(d0|d1|d2|d3|a0|a1|acc)\b'
       scope: entity.other.attribute-name.basm

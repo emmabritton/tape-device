@@ -438,7 +438,7 @@ impl Device {
                 self.tape_ops[idx + 1],
                 self.get_reg_content(self.tape_ops[idx + 2])?,
             )?,
-            RET => self.stack_return(),
+            RET => self.stack_return()?,
             CALL_ADDR => {
                 self.stack_call(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]), false)
             }
@@ -1134,10 +1134,13 @@ impl Device {
         self.mem[self.sp as usize] = value;
     }
 
-    fn sp_remove(&mut self) -> u8 {
+    fn sp_remove(&mut self) -> Result<u8> {
+        if self.sp as usize >= self.mem.len() {
+            return Err(Error::msg(format!("Attempted to pop beyond memory")));
+        }
         let value = self.mem[self.sp as usize];
         self.sp = self.sp.saturating_add(1).min(SP_MAX);
-        value
+        Ok(value)
     }
 
     fn stack_push(&mut self, value: u8) {
@@ -1164,13 +1167,13 @@ impl Device {
 
     fn stack_pop(&mut self, reg: u8) -> Result<()> {
         match reg {
-            REG_ACC => self.acc = self.sp_remove(),
-            REG_D0 => self.data_reg[0] = self.sp_remove(),
-            REG_D1 => self.data_reg[1] = self.sp_remove(),
-            REG_D2 => self.data_reg[2] = self.sp_remove(),
-            REG_D3 => self.data_reg[3] = self.sp_remove(),
-            REG_A0 => self.addr_reg[0] = u16::from_be_bytes([self.sp_remove(), self.sp_remove()]),
-            REG_A1 => self.addr_reg[1] = u16::from_be_bytes([self.sp_remove(), self.sp_remove()]),
+            REG_ACC => self.acc = self.sp_remove()?,
+            REG_D0 => self.data_reg[0] = self.sp_remove()?,
+            REG_D1 => self.data_reg[1] = self.sp_remove()?,
+            REG_D2 => self.data_reg[2] = self.sp_remove()?,
+            REG_D3 => self.data_reg[3] = self.sp_remove()?,
+            REG_A0 => self.addr_reg[0] = u16::from_be_bytes([self.sp_remove()?, self.sp_remove()?]),
+            REG_A1 => self.addr_reg[1] = u16::from_be_bytes([self.sp_remove()?, self.sp_remove()?]),
             _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
         }
 
@@ -1243,19 +1246,21 @@ impl Device {
         self.fp = self.sp;
     }
 
-    fn stack_return(&mut self) {
+    fn stack_return(&mut self) -> Result<()> {
         let mut bytes = [0; 2];
-        bytes[1] = self.sp_remove();
-        bytes[0] = self.sp_remove();
+        bytes[1] = self.sp_remove()?;
+        bytes[0] = self.sp_remove()?;
         self.pc = u16::from_be_bytes(bytes);
 
-        bytes[1] = self.sp_remove();
-        bytes[0] = self.sp_remove();
+        bytes[1] = self.sp_remove()?;
+        bytes[0] = self.sp_remove()?;
         self.fp = u16::from_be_bytes(bytes);
 
         while self.fp < self.sp {
-            self.sp_remove();
+            self.sp_remove()?;
         }
+
+        Ok(())
     }
 }
 

@@ -219,7 +219,7 @@ impl Device {
             ),
             ADD_REG_AREG => self.add(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
-                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
+                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?,
             ),
             SUB_REG_REG => self.sub(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
@@ -231,7 +231,7 @@ impl Device {
             ),
             SUB_REG_AREG => self.sub(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
-                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
+                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?,
             ),
             MEMR_ADDR => self.set_data_reg(
                 REG_ACC,
@@ -259,6 +259,10 @@ impl Device {
             CPY_AREG_ADDR => self.copy_addr_reg_val(
                 self.tape_ops[idx + 1],
                 addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
+            )?,
+            CPY_AREG_AREG => self.set_addr_reg(
+                self.tape_ops[idx + 1],
+                self.get_addr_reg_content(self.tape_ops[idx + 2])?,
             )?,
             MEMW_ADDR => self.store(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2])),
             MEMW_AREG => self.store(self.get_addr_reg_content(self.tape_ops[idx + 1])?),
@@ -485,9 +489,9 @@ impl Device {
                 self.get_addr_reg_content(self.tape_ops[idx + 2])?,
                 FCHK_VAL_AREG,
             ),
-            TIME => self.get_time(),
+            TIME => self.set_time(),
             RAND_REG => self.rand(self.tape_ops[idx + 1])?,
-            SEED_REG => self.seed(self.tape_ops[idx + 1])?,
+            SEED_REG => self.seed(self.get_reg_content(self.tape_ops[idx + 1])?)?,
             AND_REG_REG => self.bit_and(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.get_reg_content(self.tape_ops[idx + 2])?,
@@ -540,7 +544,7 @@ impl Device {
             CPY_REG_AREG => self.load_data(self.tape_ops[idx + 1], self.tape_ops[idx + 2])?,
             CMP_REG_AREG => self.compare_data(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
-                self.tape_ops[idx + 2],
+                self.get_addr_reg_content(self.tape_ops[idx + 2])?,
             )?,
             PRTD_AREG => self.print_data(self.tape_ops[idx + 1])?,
             DEBUG => {
@@ -563,7 +567,7 @@ impl Device {
                 return Err(Error::msg(format!(
                     "Unknown instruction: {:02X}",
                     self.tape_ops[idx]
-                )))
+                )));
             }
         }
         if !is_jump_op(self.tape_ops[idx]) {
@@ -622,6 +626,15 @@ impl Device {
         Ok(())
     }
 
+    fn set_addr_reg(&mut self, reg: u8, value: u16) -> Result<()> {
+        match reg {
+            REG_A0 => self.addr_reg[0] = value,
+            REG_A1 => self.addr_reg[1] = value,
+            _ => return Err(Error::msg(format!("Invalid address register: {:02X}", reg))),
+        }
+        Ok(())
+    }
+
     //Operations
 
     fn load_addr_reg(&mut self, addr_reg: u8, reg1: u8, reg2: u8) -> Result<()> {
@@ -632,10 +645,10 @@ impl Device {
                 return Err(Error::msg(format!(
                     "Invalid addr register: {:02X}",
                     addr_reg
-                )))
+                )));
             }
         }
-        .to_be_bytes();
+            .to_be_bytes();
         self.set_data_reg(reg1, bytes[0])?;
         self.set_data_reg(reg2, bytes[1])?;
 
@@ -653,7 +666,7 @@ impl Device {
                 return Err(Error::msg(format!(
                     "Invalid addr register: {:02X}",
                     addr_reg
-                )))
+                )));
             }
         }
 
@@ -749,7 +762,7 @@ impl Device {
                 return Err(Error::msg(format!(
                     "Invalid addr register: {:02X}",
                     addr_reg
-                )))
+                )));
             }
         }
 
@@ -783,7 +796,7 @@ impl Device {
     }
 
     fn seek_file_stack(&mut self, file_num: usize) -> Result<()> {
-        let mut bytes = [0,0,0,0,0,0,0,0];
+        let mut bytes = [0, 0, 0, 0, 0, 0, 0, 0];
         self.stack_pop(REG_ACC)?;
         bytes[4] = self.acc;
         self.stack_pop(REG_ACC)?;
@@ -937,11 +950,7 @@ impl Device {
     }
 
     fn print_data(&mut self, areg: u8) -> Result<()> {
-        let addr = match areg {
-            REG_A0 => self.addr_reg[0],
-            REG_A1 => self.addr_reg[1],
-            _ => return Err(Error::msg(format!("Invalid addr register: {:02X}", areg))),
-        } as usize;
+        let addr = self.get_addr_reg_content(areg)? as usize;
         for i in 0..self.acc as usize {
             self.log(&format!("{}", self.tape_data[addr + i] as char));
         }
@@ -981,7 +990,7 @@ impl Device {
         self.log(&format!("{}", val as char));
     }
 
-    fn get_time(&mut self) {
+    fn set_time(&mut self) {
         let time = Local::now();
         let hour = time.hour() as u8;
         let minute = time.minute() as u8;
@@ -991,15 +1000,7 @@ impl Device {
         self.data_reg[2] = hour;
     }
 
-    fn seed(&mut self, reg: u8) -> Result<()> {
-        let value = match reg {
-            REG_ACC => self.acc,
-            REG_D0 => self.data_reg[0],
-            REG_D1 => self.data_reg[1],
-            REG_D2 => self.data_reg[2],
-            REG_D3 => self.data_reg[3],
-            _ => return Err(Error::msg(format!("Invalid register: {:02X}", reg))),
-        };
+    fn seed(&mut self, value: u8) -> Result<()> {
         self.rng = FastRng::seed(value as u64, value.not() as u64);
         Ok(())
     }
@@ -1080,13 +1081,8 @@ impl Device {
         }
     }
 
-    fn compare_data(&mut self, lhs: u8, areg: u8) -> Result<()> {
-        let data_addr = match areg {
-            REG_A0 => self.addr_reg[0],
-            REG_A1 => self.addr_reg[1],
-            _ => return Err(Error::msg(format!("Invalid addr register: {:02X}", areg))),
-        };
-        let rhs = self.get_data_content(data_addr)?;
+    fn compare_data(&mut self, lhs: u8, addr: u16) -> Result<()> {
+        let rhs = self.get_data_content(addr)?;
         match lhs.cmp(&rhs) {
             Ordering::Less => self.acc = compare::LESSER,
             Ordering::Equal => self.acc = compare::EQUAL,

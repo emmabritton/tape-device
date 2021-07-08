@@ -713,6 +713,14 @@ impl Device {
                         char[0] = 10;
                         break;
                     }
+                    KeyCode::Backspace => {
+                        char[0] = 8;
+                        break;
+                    }
+                    KeyCode::Tab => {
+                        char[0] = 9;
+                        break;
+                    }
                     KeyCode::Char(chr) => {
                         char[0] = chr as u8;
                         break;

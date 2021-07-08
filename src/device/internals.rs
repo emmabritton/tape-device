@@ -500,6 +500,10 @@ impl Device {
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
+            AND_REG_AREG => self.bit_and(
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                    self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
+            ),
             OR_REG_REG => self.bit_or(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.get_reg_content(self.tape_ops[idx + 2])?,
@@ -508,6 +512,10 @@ impl Device {
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
+            OR_REG_AREG => self.bit_or(
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
+            ),
             XOR_REG_REG => self.bit_xor(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.get_reg_content(self.tape_ops[idx + 2])?,
@@ -515,6 +523,10 @@ impl Device {
             XOR_REG_VAL => self.bit_xor(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
+            ),
+            XOR_REG_AREG => self.bit_xor(
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
             ),
             NOT_REG => self.bit_not(self.get_reg_content(self.tape_ops[idx + 1])?),
             LD_AREG_DATA_VAL_VAL => self.load_data_addr(
@@ -549,15 +561,15 @@ impl Device {
             PRTD_AREG => self.print_data(self.tape_ops[idx + 1])?,
             DEBUG => {
                 let dump = self.dump();
-                self.elog(&format!(
+                self.log(&format!(
                     "ACC: {:02X}  D0: {:02X}  D1: {:02X}  D2: {:02X}  D3: {:02X} A0: {:04X} A1: {:04X}",
                     dump.acc, dump.data_reg[0], dump.data_reg[1], dump.data_reg[2], dump.data_reg[3], dump.addr_reg[0], dump.addr_reg[1]
                 ));
-                self.elog(&format!(
+                self.log(&format!(
                     "PC: {:4} SP: {:4X} FP: {:4X} Overflowed: {}",
                     dump.pc, dump.sp, dump.fp, dump.overflow
                 ));
-                self.elog(&format!(
+                self.log(&format!(
                     "Stack ({:4X}..FFFF): {:?}",
                     dump.sp,
                     &self.mem[dump.sp as usize..0xFFFF]

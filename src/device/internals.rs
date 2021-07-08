@@ -217,6 +217,10 @@ impl Device {
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
             ),
+            ADD_REG_AREG => self.add(
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
+            ),
             SUB_REG_REG => self.sub(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.get_reg_content(self.tape_ops[idx + 2])?,
@@ -224,6 +228,10 @@ impl Device {
             SUB_REG_VAL => self.sub(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
                 self.tape_ops[idx + 2],
+            ),
+            SUB_REG_AREG => self.sub(
+                self.get_reg_content(self.tape_ops[idx + 1])?,
+                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
             ),
             MEMR_ADDR => self.set_data_reg(
                 REG_ACC,

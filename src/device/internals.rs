@@ -1136,7 +1136,7 @@ impl Device {
 
     fn sp_remove(&mut self) -> Result<u8> {
         if self.sp as usize >= self.mem.len() {
-            return Err(Error::msg(format!("Attempted to pop beyond memory")));
+            return Err(Error::msg("Attempted to pop beyond memory"));
         }
         let value = self.mem[self.sp as usize];
         self.sp = self.sp.saturating_add(1).min(SP_MAX);

@@ -31,7 +31,7 @@ pub mod system {
     pub const TAPE_HEADER_1: u8 = 0xFD;
     pub const TAPE_HEADER_2: u8 = 0xA0;
 
-    pub const PRG_VERSION: u8 = 17;
+    pub const PRG_VERSION: u8 = 1;
 }
 
 pub mod code {

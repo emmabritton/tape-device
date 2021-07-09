@@ -1,0 +1,117 @@
+Divide Example
+1
+
+# Demonstrates how to divide numbers with this language
+
+.strings
+fail1="Test "
+fail2=" failed, was "
+pass=All good
+
+.ops
+push 1
+push 1
+call divide
+cmp d3 1
+je test2
+push 1
+call fail
+
+test2:
+push 2
+push 1
+call divide
+cmp d3 2
+je test3
+push 2
+call fail
+
+test3:
+push 4
+push 2
+call divide
+cmp d3 2
+je test4
+push 3
+call fail
+
+test4:
+push 8
+push 2
+call divide
+cmp d3 4
+je test5
+push 4
+call fail
+
+test5:
+push 20
+push 4
+call divide
+cmp d3 5
+je test6
+push 5
+call fail
+
+test6:
+push 250
+push 10
+call divide
+cmp d3 25
+je test7
+push 6
+call fail
+
+test7:
+push 250
+push 25
+call divide
+cmp d3 10
+je test8
+push 7
+call fail
+
+test8:
+push 100
+push 255
+call divide
+cmp d3 1
+je fin
+push 8
+call fail
+
+
+fin:
+prts pass
+prtln
+halt
+
+fail:
+arg d0 1
+prts fail1
+prt d0
+prts fail2
+prt d3
+prtln
+halt
+
+# divide
+#  Dividers one number by another
+#  e.g. divide 10 2
+# param1 = value 1
+# param2 = value 2
+# returns = result
+divide:
+ 	arg d0 2
+ 	arg d1 1
+ 	cpy d3 0
+
+d_loop:
+ 	inc d3
+ 	sub d0 d1
+ 	cpy d0 acc
+ 	cmp d0 0
+ 	je d_fin
+ 	nover d_loop
+d_fin:
+ 	ret

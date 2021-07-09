@@ -1,0 +1,12 @@
+mod compare;
+mod copy;
+mod data;
+mod file;
+mod input;
+mod jump;
+mod logic;
+mod math;
+mod memory;
+mod misc;
+mod print;
+mod stack;

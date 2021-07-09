@@ -1,0 +1,59 @@
+FizzBuzz
+1.0
+.strings
+fizz=Fizz
+buzz=Buzz
+colon=:
+
+.ops
+const idx d0
+const worker D3
+CONST result1 D1
+const result2 d2
+const pass 0
+const fail 1
+
+# Program params
+const max 15
+const step1 3
+const step2 5
+
+start:			INC idx
+				PRT idx
+				PRTS colon
+				CALL check_fizz
+            	CALL check_buzz
+            	CMP result1 pass
+				JNE buzzer
+				PRTS fizz
+buzzer:			CMP result2 pass
+				JNE new_line
+				PRTS buzz
+new_line:		PRTLN
+				CMP idx max
+				JL start
+				HALT
+
+check_fizz:		CPY worker idx
+fizz_sub:		SUB worker step1
+				OVER fizz_fail
+				CPY worker ACC
+				CMP worker 0
+				JE fizz_pass
+				JMP fizz_sub
+fizz_pass:		CPY result1 pass
+				ret
+fizz_fail:		CPY result1 fail
+				ret
+
+check_buzz:		CPY worker idx
+buzz_sub:		SUB worker step2
+				OVER buzz_fail
+				CPY worker ACC
+				CMP worker 0
+				JE buzz_pass
+				JMP buzz_sub
+buzz_pass:		CPY result2 pass
+				ret
+buzz_fail:		CPY result2 fail
+				ret

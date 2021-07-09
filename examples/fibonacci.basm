@@ -1,0 +1,33 @@
+Fibonacci
+1.0
+.ops
+const stop_at 12 #number of numbers to print
+
+      PRT 0           #print 0
+      PRTLN           #newline
+      PRT 1           #print 1
+      PRTLN           #newline
+      CPY D0 0        #set D0 to 0
+      CPY D1 1        #set D1 to 1
+loop: ADD D0 D1       #add D0 and D1, store in ACC
+   	  PRT ACC         #print number in ACC
+	  PRTLN           #newline
+	  CPY D0 D1       #set D0 to value in D1
+	  CPY D1 ACC      #set D1 to valie in ACC
+	  INC D3          #increment D3 by 1
+	  CMP D3 stop_at  #compare value in D3 with stop_at
+	  JL loop         #if D3 is less than stop_at, jump to loop
+
+ #Memory:
+ #(with stop_at set to 12)
+ #Loop    ACC  D0  D1  D3
+ #Before  0    0   1   0
+ #0       1    0   1   0
+ #1       2    1   2   1
+ #2       3    2   3   2
+ #3       5    3   5   3
+ #4       8    5   8   4
+ #5       13   8   13  5
+ #...
+ #10      144  89  144 10
+ #11      233  144 233 11

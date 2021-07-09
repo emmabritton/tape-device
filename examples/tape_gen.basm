@@ -1,0 +1,73 @@
+Tape gen
+1
+#this program generates a tape file that will print the letters in the
+#fourth section of dat_file
+.strings
+str_file_error=Must provide file, e.g. hello.tape
+.data
+#Sub arrays are
+# 1 - Tape header
+# 2 - Prog name
+# 3 - Prog ver
+# 4 - Data used to gen prog
+dat_file=[[xFD, xA0, 16], [2, 'H', 'W'], [1, '1'], ['H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd']]
+.ops
+const op_prtc x95
+const op_prtln x92
+
+	fchk 0 file_ready
+	prts str_file_error
+	prtln
+	halt
+
+file_ready:
+	fopen 0
+	ld a0 dat_file 1 0
+	cpy d3 3
+	call inc_and_write
+	ld a0 dat_file 2 0
+	cpy d3 3
+	call inc_and_write
+	ld a0 dat_file 3 0
+	cpy d3 2
+	call inc_and_write
+
+	ld a0 dat_file 0 4 #prog byte count (calculated at prog data * 2 + 1)
+	cpy d2 a0    #store letter count for later
+	cpy acc a0
+	add acc acc
+	add acc 1
+	cpy d3 acc  #have to copy value to d3 as acc is set to length written on filew call
+
+	filew 0 0    #write length of prog bytes
+	filew 0 d3   #max of xFFFF so two bytes have to be written
+
+	ld a0 dat_file 4 0
+prog_loop:
+	filew 0 op_prtc
+	cpy acc a0
+	filew 0 acc
+	dec d2
+	inc a0
+	cmp d2 0
+	jne prog_loop
+
+	filew 0 op_prtln
+	filew 0 0            #tape file must end with length of strings in bytes
+	filew 0 0            #max of xFFFF so two bytes have to be written
+
+	halt
+
+
+#uses d3 as count
+inc_and_write:
+	cpy acc a0
+	filew 0 acc
+	inc a0
+	dec d3
+	cmp d3 0
+	je w_done
+	jmp inc_and_write
+
+w_done:
+	ret

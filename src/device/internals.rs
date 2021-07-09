@@ -1,6 +1,6 @@
 use crate::constants::code::*;
 use crate::constants::hardware::*;
-use crate::constants::{compare, get_byte_count, does_op_update_pc_directly};
+use crate::constants::{compare, get_byte_count, is_jump_op};
 use crate::device::comm::Input::*;
 use crate::device::comm::Output::*;
 use crate::device::comm::*;

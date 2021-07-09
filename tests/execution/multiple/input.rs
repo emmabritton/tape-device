@@ -1,8 +1,8 @@
-use crate::{setup, assert_step_device, assert_no_output, assert_memory};
-use tape_device::constants::code::{IPOLL_ADDR, RCHR_REG, RSTR_AREG, HALT, IPOLL_AREG, RSTR_ADDR};
-use tape_device::device::Dump;
-use tape_device::constants::hardware::{REG_ACC, REG_A0, REG_A1};
+use crate::{assert_memory, assert_no_output, assert_step_device, setup};
+use tape_device::constants::code::{HALT, IPOLL_ADDR, IPOLL_AREG, RCHR_REG, RSTR_ADDR, RSTR_AREG};
+use tape_device::constants::hardware::{REG_A0, REG_A1, REG_ACC};
 use tape_device::device::internals::RunResult;
+use tape_device::device::Dump;
 
 #[test]
 #[rustfmt::skip]

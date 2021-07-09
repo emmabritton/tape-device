@@ -13,31 +13,6 @@ fn make_op_model(opcode: u8, params: Vec<Param>, line: &str, line_num: usize) ->
     OpModel::new(opcode, params, line.to_owned(), line.to_owned(), line_num)
 }
 
-fn make_op_model_constant(
-    opcode: u8,
-    params: Vec<Param>,
-    orig_line: &str,
-    after_constant: &str,
-    line_num: usize,
-) -> OpModel {
-    OpModel::new(
-        opcode,
-        params,
-        after_constant.to_owned(),
-        orig_line.to_owned(),
-        line_num,
-    )
-}
-
-#[rustfmt::skip]
-fn insert_constant(program_model: &mut ProgramModel, key: &str, value: &str, line_num: usize, usages: Vec<(&str, usize)>) {
-    let mut constant = ConstantModel::new(key.to_owned(), value.to_owned(), format!("const {} {}", key, value), line_num);
-    for (line, num) in usages {
-        constant.usage.push(Usage::new(line.to_owned(), num));
-    }
-    program_model.constants.insert(key.to_owned(), constant);
-}
-
 #[rustfmt::skip]
 fn test_single_instruction(line: &str, op: u8, params: Vec<Param>) {
     let mut model = new_program_model("", "");

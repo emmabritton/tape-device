@@ -34,7 +34,7 @@ pub struct Device {
     rng: FastRng,
     pub keyboard_buffer: Vec<u8>,
     pub input: Vec<Input>,
-    pub output: Vec<Output>
+    pub output: Vec<Output>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -76,7 +76,7 @@ impl Device {
             rng: FastRng::new(),
             keyboard_buffer: vec![],
             input: vec![],
-            output: vec![]
+            output: vec![],
         }
     }
 }
@@ -448,17 +448,17 @@ impl Device {
             }
             RCHR_REG => {
                 if !self.read_char(self.tape_ops[idx + 1])? {
-                    return Ok(RunResult::CharInputRequested)
+                    return Ok(RunResult::CharInputRequested);
                 }
-            },
+            }
             RSTR_ADDR => {
                 if !self.read_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))? {
-                    return Ok(RunResult::StringInputRequested)
+                    return Ok(RunResult::StringInputRequested);
                 }
-            },
-            RSTR_AREG =>{
+            }
+            RSTR_AREG => {
                 if !self.read_string(self.get_addr_reg_content(self.tape_ops[idx + 1])?)? {
-                    return Ok(RunResult::StringInputRequested)
+                    return Ok(RunResult::StringInputRequested);
                 }
             }
             MEMP_ADDR => self.print_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
@@ -716,7 +716,7 @@ impl Device {
     }
 
     fn read_char(&mut self, reg: u8) -> Result<bool> {
-        return if self.keyboard_buffer.is_empty() {
+        if self.keyboard_buffer.is_empty() {
             Ok(false)
         } else {
             let chr = self.keyboard_buffer.remove(0);

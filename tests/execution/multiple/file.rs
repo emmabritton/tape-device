@@ -1,8 +1,12 @@
 use crate::{assert_memory, assert_no_output, assert_step_device};
 use std::fs::{remove_file, File};
 use std::io::Write;
-use tape_device::constants::code::{FCHK_REG_ADDR, FCHK_REG_AREG, FCHK_VAL_ADDR, FCHK_VAL_AREG, FILER_VAL_ADDR, FOPEN_REG, FOPEN_VAL, FSKIP_VAL_VAL, HALT, FSEEK_VAL, FILER_REG_AREG, FSEEK_REG, PUSH_VAL, FILEW_REG_VAL, FILEW_VAL_VAL, FILEW_VAL_REG, FILEW_REG_REG, FILER_REG_ADDR, FILEW_VAL_ADDR};
-use tape_device::constants::hardware::{REG_A0, REG_A1, REG_ACC, REG_D1, REG_D0, REG_D3};
+use tape_device::constants::code::{
+    FCHK_REG_ADDR, FCHK_REG_AREG, FCHK_VAL_ADDR, FCHK_VAL_AREG, FILER_REG_ADDR, FILER_REG_AREG,
+    FILER_VAL_ADDR, FILEW_REG_REG, FILEW_REG_VAL, FILEW_VAL_ADDR, FILEW_VAL_REG, FILEW_VAL_VAL,
+    FOPEN_REG, FOPEN_VAL, FSEEK_REG, FSEEK_VAL, FSKIP_VAL_VAL, HALT, PUSH_VAL,
+};
+use tape_device::constants::hardware::{REG_A0, REG_A1, REG_ACC, REG_D0, REG_D1, REG_D3};
 use tape_device::device::internals::Device;
 use tape_device::device::Dump;
 use tempfile::tempdir;

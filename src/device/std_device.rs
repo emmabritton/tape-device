@@ -2,7 +2,7 @@ use crate::device::comm::Output;
 use crate::device::internals::{Device, RunResult};
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyModifiers};
-use crossterm::style::{Color, Print, SetForegroundColor, ResetColor};
+use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
 use crossterm::ExecutableCommand;
 use std::io::{stdin, stdout};
 use std::mem::swap;
@@ -72,7 +72,9 @@ impl StdDevice {
     fn read_str(&mut self) {
         let mut chars = String::new();
         stdin().read_line(&mut chars).unwrap();
-        self.device.keyboard_buffer.extend_from_slice(chars.trim().as_bytes());
+        self.device
+            .keyboard_buffer
+            .extend_from_slice(chars.trim().as_bytes());
     }
 
     fn read_char(&self) -> Result<u8> {

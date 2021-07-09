@@ -1,7 +1,7 @@
 mod debug_model;
 mod generator;
-mod parser;
-mod program_model;
+pub mod parser;
+pub mod program_model;
 
 use crate::assembler::generator::generate_byte_code;
 use crate::assembler::parser::generate_program_model;

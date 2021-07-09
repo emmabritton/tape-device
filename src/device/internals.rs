@@ -1,27 +1,29 @@
 use crate::constants::code::*;
 use crate::constants::hardware::*;
 use crate::constants::{compare, get_byte_count, is_jump_op};
-use crate::device::internals::RunResult::{Breakpoint, EoF, ProgError};
-use crate::printer::{Printer, RcBox};
+use crate::device::comm::Input::*;
+use crate::device::comm::Output::*;
+use crate::device::comm::*;
+use crate::device::internals::RunResult::{Breakpoint, EoF, Halt, Pause, ProgError};
+use crate::device::Dump;
 use anyhow::{Error, Result};
 use chrono::{Local, Timelike};
-use crossterm::event::{Event, KeyCode, KeyModifiers};
 use random_fast_rng::{FastRng, Random};
 use std::cmp::Ordering;
 use std::fs::{File, OpenOptions};
 use std::io::{stdin, Read, Seek, SeekFrom, Write};
+use std::mem::swap;
 use std::ops::{BitAnd, BitOr, BitXor, Not};
 use std::time::Duration;
 
-const SP_MAX: u16 = u16::MAX;
 const KEY_CODE_RETURN: u8 = 10;
 
 //Fields are only public for testing
 pub struct Device {
     pub mem: [u8; RAM_SIZE],
     tape_ops: Vec<u8>,
-    tape_strings: Vec<u8>,
-    tape_data: Vec<u8>,
+    pub tape_strings: Vec<u8>,
+    pub tape_data: Vec<u8>,
     data_files: Vec<String>,
     flags: Flags,
     pc: u16,
@@ -32,53 +34,27 @@ pub struct Device {
     pub addr_reg: [u16; ADDR_REG_COUNT],
     files: Vec<Option<File>>,
     breakpoints: Vec<u16>,
-    pub printer: RcBox<dyn Printer>,
     rng: FastRng,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct Dump {
-    pub pc: u16,
-    pub acc: u8,
-    pub sp: u16,
-    pub fp: u16,
-    pub data_reg: [u8; DATA_REG_COUNT],
-    pub addr_reg: [u16; ADDR_REG_COUNT],
-    pub overflow: bool,
-}
-
-impl Default for Dump {
-    fn default() -> Self {
-        Dump {
-            pc: 0,
-            acc: 0,
-            sp: SP_MAX,
-            fp: SP_MAX,
-            data_reg: [0, 0, 0, 0],
-            addr_reg: [0, 0],
-            overflow: false,
-        }
-    }
+    pub keyboard_buffer: Vec<u8>,
+    pub input: Vec<Input>,
+    pub output: Vec<Output>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum RunResult {
+    Pause,
     ///Breakpoint hit
     Breakpoint,
     ///End of program
     EoF,
-    ///Program error or HALT
+    ///Program error
     ProgError,
+    //HALT instruction
+    Halt,
 }
 
 impl Device {
-    pub fn new(
-        ops: Vec<u8>,
-        strings: Vec<u8>,
-        data: Vec<u8>,
-        data_files: Vec<String>,
-        printer: RcBox<dyn Printer>,
-    ) -> Self {
+    pub fn new(ops: Vec<u8>, strings: Vec<u8>, data: Vec<u8>, data_files: Vec<String>) -> Self {
         let mut files = Vec::with_capacity(data_files.len());
         for _ in 0..data_files.len() {
             files.push(None);
@@ -90,16 +66,18 @@ impl Device {
             data_reg: [0; DATA_REG_COUNT],
             addr_reg: [0; ADDR_REG_COUNT],
             pc: 0,
-            sp: SP_MAX,
-            fp: SP_MAX,
+            sp: RAM_SIZE as u16,
+            fp: RAM_SIZE as u16,
             breakpoints: vec![],
             tape_ops: ops,
             tape_strings: strings,
             tape_data: data,
             data_files,
             files,
-            printer,
             rng: FastRng::new(),
+            keyboard_buffer: vec![],
+            input: vec![],
+            output: vec![],
         }
     }
 }
@@ -110,60 +88,69 @@ pub struct Flags {
 }
 
 impl Device {
-    pub fn run(&mut self) -> RunResult {
-        loop {
-            if self.breakpoints.contains(&self.pc) {
-                return Breakpoint;
-            }
-            if self.pc as usize >= self.tape_ops.len() {
-                return EoF;
-            }
-            if !self.step() {
-                return ProgError;
-            }
-        }
-    }
-
     ///Execute next instruction
-    ///Returns false if an error occurs or HALT is found, true otherwise
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self, ignore_breakpoints: bool) -> RunResult {
+        let mut msgs = vec![];
+        swap(&mut self.input, &mut msgs);
+        for msg in msgs {
+            self.handle_message(msg);
+        }
         if self.pc as usize >= self.tape_ops.len() {
-            panic!("Tried to execute EoF")
+            return EoF;
+        }
+        if !ignore_breakpoints && self.breakpoints.contains(&self.pc) {
+            self.output.push(Output::BreakpointHit(self.pc));
+            return Breakpoint;
         }
         self.execute()
     }
 
-    fn log(&mut self, msg: &str) {
-        self.printer.borrow_mut().print(msg);
+    pub fn handle_message(&mut self, input: Input) {
+        match input {
+            SetBreakpoint(byte) => {
+                self.breakpoints.push(byte);
+            }
+            ClearBreakpoint(byte) => {
+                self.breakpoints.retain(|num| num != &byte);
+            }
+            RequestDump => {
+                self.output.push(Output::Status(self.dump()));
+            }
+            RequestMem(start, end) => {
+                let bytes = &self.mem[start as usize..end as usize];
+                self.output.push(OutputMem(bytes.to_vec(), false));
+            }
+            Stack => {
+                let bytes = &self.mem[self.sp as usize..RAM_SIZE];
+                self.output.push(OutputMem(bytes.to_vec(), true));
+            }
+            Jump(byte) => {
+                self.pc = byte;
+            }
+        }
     }
 
-    fn elog(&mut self, msg: &str) {
-        self.printer.borrow_mut().eprint(msg);
-        self.printer.borrow_mut().newline();
+    fn log(&mut self, msg: String) {
+        self.output.push(OutputStd(msg));
     }
 
-    #[allow(dead_code)]
-    pub fn set_breakpoint(&mut self, line: u16) {
-        self.breakpoints.push(line);
+    fn elog(&mut self, msg: String) {
+        self.output.push(OutputErr(msg));
     }
 
-    #[allow(dead_code)]
-    pub fn clear_breakpoint(&mut self, line: u16) {
-        self.breakpoints = self
-            .breakpoints
-            .iter()
-            .filter(|&val| val != &line)
-            .cloned()
-            .collect();
-    }
-
-    fn execute(&mut self) -> bool {
+    fn execute(&mut self) -> RunResult {
         return match self.try_execute() {
-            Ok(continue_running) => continue_running,
+            Ok(continue_running) => {
+                if continue_running {
+                    Pause
+                } else {
+                    Halt
+                }
+            }
             Err(err) => {
-                self.elog(&format!("\nFatal error at byte {}:", self.pc));
-                self.elog(&format!("{}", err));
-                self.elog("\nInstructions:");
+                self.elog(format!("\nFatal error at byte {}:", self.pc));
+                self.elog(format!("{}", err));
+                self.elog(String::from("\nInstructions:"));
                 let mut output = String::new();
                 let mut idx = 0;
                 let start = self.pc.saturating_sub(9);
@@ -174,24 +161,24 @@ impl Device {
                         idx += 3;
                     }
                 }
-                self.elog(&output);
-                self.elog(&format!("{1: >0$}", idx + 2, "^^"));
+                self.elog(output);
+                self.elog(format!("{1: >0$}", idx + 2, "^^"));
                 let dump = self.dump();
-                self.elog("\nDump:");
-                self.elog(&format!(
+                self.elog(String::from("\nDump:"));
+                self.elog(format!(
                     "ACC: {:02X}  D0: {:02X}  D1: {:02X}  D2: {:02X}  D3: {:02X} A0: {:04X} A1: {:04X}",
                     dump.acc, dump.data_reg[0], dump.data_reg[1], dump.data_reg[2], dump.data_reg[3], dump.addr_reg[0], dump.addr_reg[1]
                 ));
-                self.elog(&format!(
+                self.elog(format!(
                     "PC: {:4} SP: {:4X} FP: {:4X} Overflowed: {}",
                     dump.pc, dump.sp, dump.fp, dump.overflow
                 ));
-                self.elog(&format!(
+                self.elog(format!(
                     "Stack ({:4X}..FFFF): {:?}",
                     dump.sp,
                     &self.mem[dump.sp as usize..0xFFFF]
                 ));
-                false
+                ProgError
             }
         };
     }
@@ -256,7 +243,7 @@ impl Device {
                 self.tape_ops[idx + 1],
                 self.tape_ops[idx + 2],
             )?,
-            CPY_AREG_ADDR => self.copy_addr_reg_val(
+            CPY_AREG_ADDR => self.set_addr_reg(
                 self.tape_ops[idx + 1],
                 addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
             )?,
@@ -369,7 +356,7 @@ impl Device {
             PRTC_AREG => self
                 .printc(self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?),
             PRTLN => {
-                self.printer.borrow_mut().newline();
+                self.output.push(OutputStd(String::from("\n")));
             }
             PRTS_STR => {
                 self.print_tape_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))
@@ -392,7 +379,9 @@ impl Device {
                 addr(self.tape_ops[idx + 2], self.tape_ops[idx + 3]),
             )?,
 
-            FSEEK_REG => self.seek_file_stack(self.get_reg_content(self.tape_ops[idx + 1])? as usize)?,
+            FSEEK_REG => {
+                self.seek_file_stack(self.get_reg_content(self.tape_ops[idx + 1])? as usize)?
+            }
             FSKIP_REG_REG => self.skip_file(
                 self.get_reg_content(self.tape_ops[idx + 1])? as usize,
                 self.get_reg_content(self.tape_ops[idx + 2])?,
@@ -502,7 +491,7 @@ impl Device {
             ),
             AND_REG_AREG => self.bit_and(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
-                    self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
+                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?,
             ),
             OR_REG_REG => self.bit_or(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
@@ -514,7 +503,7 @@ impl Device {
             ),
             OR_REG_AREG => self.bit_or(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
-                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
+                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?,
             ),
             XOR_REG_REG => self.bit_xor(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
@@ -526,7 +515,7 @@ impl Device {
             ),
             XOR_REG_AREG => self.bit_xor(
                 self.get_reg_content(self.tape_ops[idx + 1])?,
-                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?
+                self.get_data_content(self.get_addr_reg_content(self.tape_ops[idx + 2])?)?,
             ),
             NOT_REG => self.bit_not(self.get_reg_content(self.tape_ops[idx + 1])?),
             LD_AREG_DATA_VAL_VAL => self.load_data_addr(
@@ -561,15 +550,15 @@ impl Device {
             PRTD_AREG => self.print_data(self.tape_ops[idx + 1])?,
             DEBUG => {
                 let dump = self.dump();
-                self.log(&format!(
+                self.log(format!(
                     "ACC: {:02X}  D0: {:02X}  D1: {:02X}  D2: {:02X}  D3: {:02X} A0: {:04X} A1: {:04X}",
                     dump.acc, dump.data_reg[0], dump.data_reg[1], dump.data_reg[2], dump.data_reg[3], dump.addr_reg[0], dump.addr_reg[1]
                 ));
-                self.log(&format!(
+                self.log(format!(
                     "PC: {:4} SP: {:4X} FP: {:4X} Overflowed: {}",
                     dump.pc, dump.sp, dump.fp, dump.overflow
                 ));
-                self.log(&format!(
+                self.log(format!(
                     "Stack ({:4X}..FFFF): {:?}",
                     dump.sp,
                     &self.mem[dump.sp as usize..0xFFFF]
@@ -660,7 +649,7 @@ impl Device {
                 )));
             }
         }
-            .to_be_bytes();
+        .to_be_bytes();
         self.set_data_reg(reg1, bytes[0])?;
         self.set_data_reg(reg2, bytes[1])?;
 
@@ -715,69 +704,14 @@ impl Device {
     fn print_string(&mut self, addr: u16) -> Result<()> {
         let start = addr as usize;
         let end = (addr + self.acc as u16) as usize;
-        self.log(
-            String::from_utf8_lossy(&self.mem[start..end])
-                .to_string()
-                .as_str(),
-        );
+        self.log(String::from_utf8_lossy(&self.mem[start..end]).to_string());
         Ok(())
     }
 
     fn read_char(&mut self, reg: u8) -> Result<()> {
-        let mut char = [0_u8; 1];
-        crossterm::terminal::enable_raw_mode()?;
-        let mut event = crossterm::event::read()?;
-        loop {
-            if let Event::Key(key) = event {
-                if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c') {
-                    crossterm::terminal::disable_raw_mode()?;
-                    std::process::exit(1);
-                }
-                match key.code {
-                    KeyCode::Enter => {
-                        char[0] = 10;
-                        break;
-                    }
-                    KeyCode::Backspace => {
-                        char[0] = 8;
-                        break;
-                    }
-                    KeyCode::Tab => {
-                        char[0] = 9;
-                        break;
-                    }
-                    KeyCode::Char(chr) => {
-                        char[0] = chr as u8;
-                        break;
-                    }
-                    KeyCode::Esc => {
-                        char[0] = 27;
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-            event = crossterm::event::read()?;
-        }
-        crossterm::terminal::disable_raw_mode()?;
-
-        self.set_data_reg(reg, char[0])?;
-
-        Ok(())
-    }
-
-    fn copy_addr_reg_val(&mut self, addr_reg: u8, addr: u16) -> Result<()> {
-        match addr_reg {
-            REG_A0 => self.addr_reg[0] = addr,
-            REG_A1 => self.addr_reg[1] = addr,
-            _ => {
-                return Err(Error::msg(format!(
-                    "Invalid addr register: {:02X}",
-                    addr_reg
-                )));
-            }
-        }
-
+        self.output.push(RequestInputChr);
+        let chr = self.keyboard_buffer.remove(0);
+        self.set_data_reg(reg, chr)?;
         Ok(())
     }
 
@@ -964,13 +898,13 @@ impl Device {
     fn print_data(&mut self, areg: u8) -> Result<()> {
         let addr = self.get_addr_reg_content(areg)? as usize;
         for i in 0..self.acc as usize {
-            self.log(&format!("{}", self.tape_data[addr + i] as char));
+            self.log(format!("{}", self.tape_data[addr + i] as char));
         }
         Ok(())
     }
 
     fn print(&mut self, val: u8) {
-        self.log(&format!("{}", val));
+        self.log(format!("{}", val));
     }
 
     fn bit_and(&mut self, lhs: u8, rhs: u8) {
@@ -994,12 +928,12 @@ impl Device {
         let str_start = (data_addr + 1) as usize;
         for i in 0..length {
             let chr_addr = str_start + i;
-            self.log(&format!("{}", self.tape_strings[chr_addr] as char));
+            self.log(format!("{}", self.tape_strings[chr_addr] as char));
         }
     }
 
     fn printc(&mut self, val: u8) {
-        self.log(&format!("{}", val as char));
+        self.log(format!("{}", val as char));
     }
 
     fn set_time(&mut self) {
@@ -1163,7 +1097,7 @@ impl Device {
             return Err(Error::msg("Attempted to pop beyond memory"));
         }
         let value = self.mem[self.sp as usize];
-        self.sp = self.sp.saturating_add(1).min(SP_MAX);
+        self.sp = self.sp.saturating_add(1).min(RAM_SIZE as u16);
         Ok(value)
     }
 
@@ -1207,13 +1141,11 @@ impl Device {
     fn stack_arg(&mut self, reg: u8, offset: u8) -> Result<()> {
         let addr = self.fp.saturating_add(offset.saturating_add(3) as u16) as usize;
         let addr_second = self.fp.saturating_add((offset.saturating_add(4)) as u16) as usize;
-        if addr >= SP_MAX as usize
-            || ((reg == REG_A0 || reg == REG_A1) && addr_second >= SP_MAX as usize)
-        {
+        if addr >= RAM_SIZE || ((reg == REG_A0 || reg == REG_A1) && addr_second >= RAM_SIZE) {
             return Err(Error::msg(format!(
                 "Attempted to access argument beyond memory {}, max {}",
                 addr,
-                SP_MAX - 1
+                RAM_SIZE - 1
             )));
         }
         match reg {
@@ -1291,4 +1223,3 @@ impl Device {
 fn addr(byte1: u8, byte2: u8) -> u16 {
     u16::from_be_bytes([byte1, byte2])
 }
-

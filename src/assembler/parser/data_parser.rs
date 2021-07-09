@@ -37,7 +37,7 @@ enum ValueMode {
     Number,
     Hex,
     Char,
-    Binary
+    Binary,
 }
 
 impl DataParser {
@@ -305,7 +305,9 @@ impl DataParser {
                     self.current_content.push(chr);
                     self.value_mode = ValueMode::Number;
                 }
-                ValueMode::Char | ValueMode::Hex | ValueMode::Number => self.current_content.push(chr),
+                ValueMode::Char | ValueMode::Hex | ValueMode::Number => {
+                    self.current_content.push(chr)
+                }
                 ValueMode::Binary => {
                     if chr == '0' || chr == '1' {
                         self.current_content.push(chr);
@@ -326,7 +328,7 @@ impl DataParser {
                     )));
                 }
                 ValueMode::Char | ValueMode::Hex => self.current_content.push(chr),
-            }
+            },
             'A'..='F' | 'a'..='f' => match self.value_mode {
                 ValueMode::Number | ValueMode::None | ValueMode::Binary => {
                     return Err(Error::msg(format!(

@@ -119,7 +119,10 @@ fn parse_number(input: &str) -> Result<Param> {
             let bin = input.chars().skip(1).collect::<String>();
             u8::from_str_radix(&bin, 2)
         } else {
-            return Err(Error::msg(format!("Error parsing number {}: must be b followed all 8 bits", input)));
+            return Err(Error::msg(format!(
+                "Error parsing number {}: must be b followed all 8 bits",
+                input
+            )));
         }
     } else if input.len() == 3 && input.starts_with('\'') && input.ends_with('\'') {
         let chr = input.chars().nth(1).unwrap();

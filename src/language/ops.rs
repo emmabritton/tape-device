@@ -10,7 +10,7 @@ use lazy_static::lazy_static;
 //language.md
 
 lazy_static! {
-    pub static ref OPS: [Op; 48] = [
+    pub static ref OPS: [Op; 47] = [
         //CPY reg reg, reg val, areg areg, areg label|addr, areg reg reg, reg reg areg, reg areg
         //Copy value from 2nd param to 1st
         Op::new_reg_complex("CPY", CPY_REG_REG, CPY_REG_VAL, CPY_AREG_AREG, CPY_AREG_ADDR, CPY_AREG_REG_REG, CPY_REG_REG_AREG, CPY_REG_AREG),
@@ -122,9 +122,6 @@ lazy_static! {
         //MEMP addr_reg|addr
         //Print ACC chars from 1st param in memory or data
         Op::new_mem("MEMP", MEMP_ADDR, MEMP_AREG),
-        //MEMC addr_reg addr_reg
-        //Copy ACC bytes from 1st param in data to 2nd param in memory
-        Op::new_areg_areg("MEMC", MEMC_AREG_AREG),
         //RSTR addr_reg|addr
         //Read up to chars keyboard (until return is pressed or 255 entered) starting at 1st param in memory
         Op::new_mem("RSTR", RSTR_ADDR, RSTR_AREG),

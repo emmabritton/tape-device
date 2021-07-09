@@ -13,7 +13,6 @@ pub mod constants;
 pub mod decompiler;
 pub mod device;
 pub mod language;
-pub mod printer;
 pub mod tape_reader;
 
 pub fn run() -> Result<()> {

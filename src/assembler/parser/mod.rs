@@ -96,7 +96,7 @@ pub fn generate_program_model(input: Vec<String>) -> Result<ProgramModel> {
     Ok(program_model)
 }
 
-fn parse_constant(program_model: &mut ProgramModel, line: &str, line_num: usize) -> Result<()> {
+pub fn parse_constant(program_model: &mut ProgramModel, line: &str, line_num: usize) -> Result<()> {
     let splits = line.split_whitespace().collect::<Vec<&str>>();
     if splits.len() < 2 {
         return Err(Error::msg(format!(
@@ -112,7 +112,7 @@ fn parse_constant(program_model: &mut ProgramModel, line: &str, line_num: usize)
     Ok(())
 }
 
-fn parse_string(program_model: &mut ProgramModel, line: &str, line_num: usize) -> Result<()> {
+pub fn parse_string(program_model: &mut ProgramModel, line: &str, line_num: usize) -> Result<()> {
     return if let Some((key, content)) = line.split_once('=') {
         let key = key.trim();
         program_model.validate_key("string key", key, line_num, false)?;
@@ -148,7 +148,7 @@ fn parse_string(program_model: &mut ProgramModel, line: &str, line_num: usize) -
     };
 }
 
-fn parse_data(program_model: &mut ProgramModel, line: &str, line_num: usize) -> Result<()> {
+pub fn parse_data(program_model: &mut ProgramModel, line: &str, line_num: usize) -> Result<()> {
     return if let Some((key, content)) = line.split_once('=') {
         let key = key.trim();
         program_model.validate_key("data key", key, line_num, false)?;
@@ -169,7 +169,7 @@ fn parse_data(program_model: &mut ProgramModel, line: &str, line_num: usize) -> 
     };
 }
 
-fn parse_op(program_model: &mut ProgramModel, orig_line: &str, line_num: usize) -> Result<()> {
+pub fn parse_op(program_model: &mut ProgramModel, orig_line: &str, line_num: usize) -> Result<()> {
     let mut line = orig_line.to_owned();
     if line.contains('#') {
         line = line.split_once('#').unwrap().0.to_owned();

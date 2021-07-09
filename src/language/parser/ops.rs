@@ -194,16 +194,6 @@ impl Op {
         }
     }
 
-    pub fn new_areg_areg(mnemonic: &'static str, opcode_addr_reg_addr_reg: u8) -> Self {
-        Op {
-            mnemonic,
-            variants: vec![OpVariant::new(
-                opcode_addr_reg_addr_reg,
-                vec![Parameters::ADDR_REG, Parameters::ADDR_REG],
-            )],
-        }
-    }
-
     pub fn new_mem(mnemonic: &'static str, opcode_addr: u8, opcode_addr_reg: u8) -> Self {
         Op {
             mnemonic,

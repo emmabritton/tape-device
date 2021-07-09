@@ -31,18 +31,17 @@ pub mod system {
     pub const TAPE_HEADER_1: u8 = 0xFD;
     pub const TAPE_HEADER_2: u8 = 0xA0;
 
-    pub const PRG_VERSION: u8 = 16;
+    pub const PRG_VERSION: u8 = 17;
 }
 
 pub mod code {
     pub const DIVDERS: [&str; 3] = [".data", ".strings", ".ops"];
     pub const KEYWORDS: [&str; 1] = ["const"];
-    pub const MNEMONICS: [&str; 48] = [
+    pub const MNEMONICS: [&str; 47] = [
         "add", "sub", "inc", "dec", "cmp", "cpy", "swp", "jmp", "je", "jg", "jl", "jne", "over",
-        "nover", "memr", "memw", "memp", "ld", "memc", "call", "ret", "push", "pop", "arg", "prt",
-        "prtc", "prtln", "prtd", "prts", "and", "or", "xor", "not", "fchk", "fopen", "fseek",
-        "fskip", "filew", "filer", "ipoll", "rchr", "rstr", "time", "rand", "seed", "debug",
-        "halt", "nop",
+        "nover", "memr", "memw", "memp", "ld", "call", "ret", "push", "pop", "arg", "prt", "prtc",
+        "prtln", "prtd", "prts", "and", "or", "xor", "not", "fchk", "fopen", "fseek", "fskip",
+        "filew", "filer", "ipoll", "rchr", "rstr", "time", "rand", "seed", "debug", "halt", "nop",
     ];
     pub const REGISTERS: [&str; 7] = ["d0", "d1", "d2", "d3", "acc", "a0", "a1"];
 
@@ -92,11 +91,10 @@ pub mod code {
     pub const MEMR_AREG: u8 = 0x41;
     pub const MEMW_ADDR: u8 = 0x42;
     pub const MEMW_AREG: u8 = 0x43;
-    pub const MEMC_AREG_AREG: u8 = 0x44;
-    pub const LD_AREG_DATA_REG_REG: u8 = 0x45;
-    pub const LD_AREG_DATA_REG_VAL: u8 = 0x46;
-    pub const LD_AREG_DATA_VAL_REG: u8 = 0x47;
-    pub const LD_AREG_DATA_VAL_VAL: u8 = 0x48;
+    pub const LD_AREG_DATA_REG_REG: u8 = 0x44;
+    pub const LD_AREG_DATA_REG_VAL: u8 = 0x45;
+    pub const LD_AREG_DATA_VAL_REG: u8 = 0x46;
+    pub const LD_AREG_DATA_VAL_VAL: u8 = 0x47;
 
     pub const CALL_ADDR: u8 = 0x70;
     pub const CALL_AREG: u8 = 0x71;
@@ -181,13 +179,12 @@ pub fn get_byte_count(opcode: u8) -> usize {
         | SWP_AREG_AREG | SWP_REG_REG | JMP_ADDR | JE_ADDR | JNE_ADDR | JL_ADDR | JG_ADDR
         | OVER_ADDR | CMP_AREG_AREG | CPY_AREG_AREG | NOVER_ADDR | CMP_REG_REG | CMP_REG_VAL
         | MEMR_ADDR | MEMW_ADDR | CALL_ADDR | PRTS_STR | FSKIP_REG_REG | FSKIP_REG_VAL
-        | MEMC_AREG_AREG | FSKIP_VAL_REG | FSKIP_VAL_VAL | ARG_REG_VAL | ARG_REG_REG
-        | MEMP_ADDR | FILER_REG_AREG | FILER_VAL_AREG | FILEW_REG_AREG | FILEW_VAL_AREG
-        | IPOLL_ADDR | IPOLL_AREG | RSTR_ADDR | RSTR_AREG | AND_REG_VAL | AND_REG_REG
-        | AND_REG_AREG | OR_REG_AREG | XOR_REG_AREG | OR_REG_VAL | OR_REG_REG | XOR_REG_REG
-        | XOR_REG_VAL | FCHK_REG_AREG | FCHK_VAL_AREG | ADD_REG_AREG | SUB_REG_AREG
-        | CPY_REG_AREG | CMP_REG_AREG | FILEW_REG_REG | FILEW_REG_VAL | FILEW_VAL_REG
-        | FILEW_VAL_VAL => 3,
+        | FSKIP_VAL_REG | FSKIP_VAL_VAL | ARG_REG_VAL | ARG_REG_REG | MEMP_ADDR
+        | FILER_REG_AREG | FILER_VAL_AREG | FILEW_REG_AREG | FILEW_VAL_AREG | IPOLL_ADDR
+        | IPOLL_AREG | RSTR_ADDR | RSTR_AREG | AND_REG_VAL | AND_REG_REG | AND_REG_AREG
+        | OR_REG_AREG | XOR_REG_AREG | OR_REG_VAL | OR_REG_REG | XOR_REG_REG | XOR_REG_VAL
+        | FCHK_REG_AREG | FCHK_VAL_AREG | ADD_REG_AREG | SUB_REG_AREG | CPY_REG_AREG
+        | CMP_REG_AREG | FILEW_REG_REG | FILEW_REG_VAL | FILEW_VAL_REG | FILEW_VAL_VAL => 3,
         CMP_AREG_ADDR | CPY_AREG_ADDR | CMP_AREG_REG_REG | CMP_REG_REG_AREG | CPY_REG_REG_AREG
         | FCHK_REG_ADDR | FCHK_VAL_ADDR | CPY_AREG_REG_REG | FILER_REG_ADDR | FILEW_VAL_ADDR
         | FILER_VAL_ADDR | FILEW_REG_ADDR => 4,
@@ -239,7 +236,7 @@ pub fn is_jump_op(opcode: u8) -> bool {
 
 #[rustfmt::skip]
 #[allow(dead_code)]
-pub const ALL_OPS: [u8; 109] = [
+pub const ALL_OPS: [u8; 108] = [
     ADD_REG_REG, ADD_REG_VAL, ADD_REG_AREG,
     SUB_REG_REG, SUB_REG_VAL, SUB_REG_AREG,
     AND_REG_REG, AND_REG_VAL, AND_REG_AREG,
@@ -300,7 +297,6 @@ pub const ALL_OPS: [u8; 109] = [
     LD_AREG_DATA_REG_VAL,
     LD_AREG_DATA_VAL_REG,
     LD_AREG_DATA_VAL_VAL,
-    MEMC_AREG_AREG,
     MEMP_ADDR, MEMP_AREG,
     PRTD_AREG,
     PRTS_STR,

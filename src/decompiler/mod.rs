@@ -277,7 +277,6 @@ pub fn decode(
         MEMP_AREG => ("PSTR", vec![decode_reg(op[1])]),
         MEMP_ADDR => ("PSTR", vec![decode_addr(op[1], op[2])]),
         RCHR_REG => ("RCHR", vec![decode_reg(op[1])]),
-        MEMC_AREG_AREG => ("MEMC", vec![decode_reg(op[1]), decode_reg(op[2])]),
         AND_REG_REG => ("AND", vec![decode_reg(op[1]), decode_reg(op[2])]),
         AND_REG_VAL => ("AND", vec![decode_reg(op[1]), decode_num(op[2])]),
         AND_REG_AREG => ("AND", vec![decode_reg(op[1]), decode_reg(op[2])]),

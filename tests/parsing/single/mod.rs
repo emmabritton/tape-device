@@ -1,6 +1,6 @@
 use crate::parsing::new_program_model;
 use tape_device::assembler::parser::parse_op;
-use tape_device::assembler::program_model::{ConstantModel, OpModel, ProgramModel, Usage};
+use tape_device::assembler::program_model::{OpModel, ProgramModel};
 use tape_device::language::parser::params::Param;
 
 mod reg_areg;

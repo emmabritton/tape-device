@@ -1,22 +1,19 @@
 use crate::constants::code::*;
 use crate::constants::hardware::*;
-use crate::constants::{compare, get_byte_count, is_jump_op};
+use crate::constants::{compare, get_byte_count, does_op_update_pc_directly};
 use crate::device::comm::Input::*;
 use crate::device::comm::Output::*;
 use crate::device::comm::*;
-use crate::device::internals::RunResult::{Breakpoint, EoF, Halt, Pause, ProgError};
+use crate::device::internals::RunResult::{Breakpoint, EoF, ProgError};
 use crate::device::Dump;
 use anyhow::{Error, Result};
 use chrono::{Local, Timelike};
 use random_fast_rng::{FastRng, Random};
 use std::cmp::Ordering;
 use std::fs::{File, OpenOptions};
-use std::io::{stdin, Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::mem::swap;
 use std::ops::{BitAnd, BitOr, BitXor, Not};
-use std::time::Duration;
-
-const KEY_CODE_RETURN: u8 = 10;
 
 //Fields are only public for testing
 pub struct Device {
@@ -37,7 +34,7 @@ pub struct Device {
     rng: FastRng,
     pub keyboard_buffer: Vec<u8>,
     pub input: Vec<Input>,
-    pub output: Vec<Output>,
+    pub output: Vec<Output>
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -51,6 +48,8 @@ pub enum RunResult {
     ProgError,
     //HALT instruction
     Halt,
+    CharInputRequested,
+    StringInputRequested,
 }
 
 impl Device {
@@ -77,7 +76,7 @@ impl Device {
             rng: FastRng::new(),
             keyboard_buffer: vec![],
             input: vec![],
-            output: vec![],
+            output: vec![]
         }
     }
 }
@@ -140,13 +139,7 @@ impl Device {
 
     fn execute(&mut self) -> RunResult {
         return match self.try_execute() {
-            Ok(continue_running) => {
-                if continue_running {
-                    Pause
-                } else {
-                    Halt
-                }
-            }
+            Ok(output) => output,
             Err(err) => {
                 self.elog(format!("\nFatal error at byte {}:", self.pc));
                 self.elog(format!("{}", err));
@@ -191,7 +184,7 @@ impl Device {
         }
     }
 
-    fn try_execute(&mut self) -> Result<bool> {
+    fn try_execute(&mut self) -> Result<RunResult> {
         let idx = self.pc as usize;
         let op = self.tape_ops[idx];
         match op {
@@ -430,7 +423,7 @@ impl Device {
             FSKIP_VAL_VAL => {
                 self.skip_file(self.tape_ops[idx + 1] as usize, self.tape_ops[idx + 2])?
             }
-            HALT => return Ok(false),
+            HALT => return Ok(RunResult::Halt),
             PUSH_VAL => self.stack_push(self.tape_ops[idx + 1]),
             PUSH_REG => self.stack_push_reg(self.tape_ops[idx + 1])?,
             POP_REG => self.stack_pop(self.tape_ops[idx + 1])?,
@@ -453,9 +446,21 @@ impl Device {
             IPOLL_AREG => {
                 self.poll_input(self.get_addr_reg_content(self.tape_ops[idx + 1])?, true)?
             }
-            RCHR_REG => self.read_char(self.tape_ops[idx + 1])?,
-            RSTR_ADDR => self.read_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
-            RSTR_AREG => self.read_string(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?,
+            RCHR_REG => {
+                if !self.read_char(self.tape_ops[idx + 1])? {
+                    return Ok(RunResult::CharInputRequested)
+                }
+            },
+            RSTR_ADDR => {
+                if !self.read_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))? {
+                    return Ok(RunResult::StringInputRequested)
+                }
+            },
+            RSTR_AREG =>{
+                if !self.read_string(self.get_addr_reg_content(self.tape_ops[idx + 1])?)? {
+                    return Ok(RunResult::StringInputRequested)
+                }
+            }
             MEMP_ADDR => self.print_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?,
             MEMP_AREG => self.print_string(self.get_addr_reg_content(self.tape_ops[idx + 1])?)?,
             FCHK_REG_ADDR => self.cond_jump(
@@ -575,7 +580,7 @@ impl Device {
             let op_size = get_byte_count(self.tape_ops[idx]) as u16;
             self.pc += op_size;
         }
-        Ok(true)
+        Ok(RunResult::Pause)
     }
 
     pub fn dump(&self) -> Dump {
@@ -675,7 +680,7 @@ impl Device {
     }
 
     fn poll_input(&mut self, addr: u16, from_areg: bool) -> Result<()> {
-        if crossterm::event::poll(Duration::from_millis(100))? {
+        if !self.keyboard_buffer.is_empty() {
             self.jump(addr)
         } else if from_areg {
             self.pc += 2;
@@ -686,19 +691,21 @@ impl Device {
         Ok(())
     }
 
-    fn read_string(&mut self, addr: u16) -> Result<()> {
-        let mut char = [0_u8; 1];
-        let mut read_count = 0;
-        stdin().read_exact(&mut char)?;
-        while read_count < 255 && char[0] != KEY_CODE_RETURN {
-            let mem = addr as usize + read_count;
-            self.mem[mem] = char[0];
-            stdin().read_exact(&mut char)?;
-            read_count += 1;
+    fn read_string(&mut self, addr: u16) -> Result<bool> {
+        if self.keyboard_buffer.is_empty() {
+            return Ok(false);
         }
-        self.acc = read_count as u8;
 
-        Ok(())
+        let len = if self.keyboard_buffer.len() > 255 {
+            255
+        } else {
+            self.keyboard_buffer.len()
+        };
+        for i in 0..len {
+            self.mem[i + addr as usize] = self.keyboard_buffer.remove(0);
+        }
+        self.acc = len as u8;
+        Ok(true)
     }
 
     fn print_string(&mut self, addr: u16) -> Result<()> {
@@ -708,11 +715,14 @@ impl Device {
         Ok(())
     }
 
-    fn read_char(&mut self, reg: u8) -> Result<()> {
-        self.output.push(RequestInputChr);
-        let chr = self.keyboard_buffer.remove(0);
-        self.set_data_reg(reg, chr)?;
-        Ok(())
+    fn read_char(&mut self, reg: u8) -> Result<bool> {
+        return if self.keyboard_buffer.is_empty() {
+            Ok(false)
+        } else {
+            let chr = self.keyboard_buffer.remove(0);
+            self.set_data_reg(reg, chr)?;
+            Ok(true)
+        }
     }
 
     fn open_file(&mut self, file_num: usize) -> Result<()> {

@@ -2,7 +2,7 @@ use crate::device::comm::Output;
 use crate::device::internals::{Device, RunResult};
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyModifiers};
-use crossterm::style::{Color, Print, SetForegroundColor};
+use crossterm::style::{Color, Print, SetForegroundColor, ResetColor};
 use crossterm::ExecutableCommand;
 use std::io::{stdin, stdout};
 use std::mem::swap;
@@ -30,14 +30,24 @@ impl StdDevice {
                 RunResult::EoF => return,
                 RunResult::ProgError => return,
                 RunResult::Halt => return,
+                RunResult::CharInputRequested => {
+                    let chr = self.read_char().expect("Error reading input (char)");
+                    self.device.keyboard_buffer.push(chr);
+                    self.last_run_result = RunResult::Pause;
+                }
+                RunResult::StringInputRequested => {
+                    self.read_str();
+                    self.last_run_result = RunResult::Pause;
+                }
             }
+
             let mut msgs = vec![];
             swap(&mut self.device.output, &mut msgs);
             for output in msgs {
                 match output {
                     Output::OutputStd(text) => {
                         stdout()
-                            .execute(SetForegroundColor(Color::White))
+                            .execute(ResetColor)
                             .expect("Error setting foreground color")
                             .execute(Print(text))
                             .expect("Error printing output");
@@ -47,23 +57,9 @@ impl StdDevice {
                             .execute(SetForegroundColor(Color::Red))
                             .expect("Error setting foreground color")
                             .execute(Print(text))
-                            .expect("Error printing error output");
-                    }
-                    Output::RequestInputChr => {
-                        let chr = self.read_char().expect("Error reading input (char)");
-                        self.device.keyboard_buffer.push(chr);
-                    }
-                    Output::RequestInputStr => {
-                        let mut line = String::new();
-                        let len = stdin()
-                            .read_line(&mut line)
-                            .expect("Error reading input (str)");
-                        let bytes = if len > 255 {
-                            line.into_bytes().iter().take(255).cloned().collect()
-                        } else {
-                            line.into_bytes()
-                        };
-                        self.device.keyboard_buffer.extend_from_slice(&bytes);
+                            .expect("Error printing error output")
+                            .execute(ResetColor)
+                            .expect("Error setting foreground color");
                     }
                     Output::BreakpointHit(_) => panic!("Encountered and stopped for breakpoint"),
                     Output::Status(_) => panic!("Unexpected system dump"),
@@ -71,6 +67,12 @@ impl StdDevice {
                 }
             }
         }
+    }
+
+    fn read_str(&mut self) {
+        let mut chars = String::new();
+        stdin().read_line(&mut chars).unwrap();
+        self.device.keyboard_buffer.extend_from_slice(chars.trim().as_bytes());
     }
 
     fn read_char(&self) -> Result<u8> {

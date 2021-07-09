@@ -28,8 +28,6 @@ pub mod comm {
     pub enum Output {
         OutputStd(String),
         OutputErr(String),
-        RequestInputChr,
-        RequestInputStr,
         BreakpointHit(u16),
         Status(Dump),
         OutputMem(Vec<u8>, bool), //bytes, is stack
@@ -39,7 +37,7 @@ pub mod comm {
         SetBreakpoint(u16),
         ClearBreakpoint(u16),
         RequestDump,
-        RequestMem(u16, u16), //start - end
+        RequestMem(u16, u16), //start, end
         Stack,
         Jump(u16),
     }

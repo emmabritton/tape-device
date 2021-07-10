@@ -2,6 +2,7 @@ pub mod internals;
 mod std_device;
 mod piped_device;
 
+use serde::Serialize;
 use crate::constants::hardware::{ADDR_REG_COUNT, DATA_REG_COUNT, RAM_SIZE};
 use crate::device::std_device::StdDevice;
 use crate::tape_reader::read_tape;
@@ -46,7 +47,7 @@ pub mod comm {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Serialize)]
 pub struct Dump {
     pub pc: u16,
     pub acc: u8,

@@ -318,7 +318,7 @@ impl Device {
                 self.output.push(OutputStd(String::from("\n")));
             }
             PRTS_STR => {
-                self.print_tape_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))
+                self.print_tape_string(addr(self.tape_ops[idx + 1], self.tape_ops[idx + 2]))?
             }
             FOPEN_REG => self.open_file(self.get_reg_content(self.tape_ops[idx + 1])? as usize)?,
             FILER_REG_ADDR => self.read_file(
@@ -899,13 +899,14 @@ impl Device {
         self.acc = value.not();
     }
 
-    fn print_tape_string(&mut self, data_addr: u16) {
-        let length = self.tape_strings[data_addr as usize] as usize;
-        let str_start = (data_addr + 1) as usize;
-        for i in 0..length {
-            let chr_addr = str_start + i;
-            self.log(format!("{}", self.tape_strings[chr_addr] as char));
-        }
+    fn print_tape_string(&mut self, data_addr: u16) -> Result<()> {
+        let length = self.tape_strings[data_addr as usize] as u16;
+        let start = (data_addr + 1) as usize;
+        let end = (data_addr + 1 + length) as usize;
+        let bytes = &self.tape_strings[start..end];
+        let msg = String::from_utf8(bytes.to_vec())?;
+        self.log(msg);
+        Ok(())
     }
 
     fn printc(&mut self, val: u8) {

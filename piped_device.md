@@ -6,6 +6,11 @@ When executing a tape file, if the tape device is run with `--piped`, e.g. `./ta
 
 Output and input for the tape program will also be sent over stdin and stdout via the host program.
 
+### Usage
+
+Input commands should be sent to the device, note that the order matters: the device will process commands until step is received at which point it will execute the next command.
+This means if nothing is sent to the device it will do anything. If step is sent twice, both will be execute before anything else.
+
 ### Commands
 
 Commands are sent/received in the format `<prefix><content>` as bytes

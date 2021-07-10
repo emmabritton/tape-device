@@ -62,23 +62,6 @@ pub fn run() -> Result<()> {
                     .required(true),
             ),
         )
-        .subcommand(
-            SubCommand::with_name("run")
-                .arg(
-                    Arg::with_name("tape")
-                        .help("Device tape to execute")
-                        .takes_value(true)
-                        .multiple(false)
-                        .required(true),
-                )
-                .arg(
-                    Arg::with_name("input")
-                        .help("Data tape for reading/writing")
-                        .takes_value(true)
-                        .multiple(true)
-                        .required(false),
-                ),
-        )
         .arg(
             Arg::with_name("tape")
                 .help("Device tape to execute")
@@ -93,18 +76,28 @@ pub fn run() -> Result<()> {
                 .multiple(true)
                 .required(false),
         )
+        .arg(
+            Arg::with_name("piped")
+                .help("Start in piped mode")
+                .takes_value(false)
+                .multiple(false)
+                .required(false)
+                .long("piped")
+        )
         .get_matches();
 
     if matches.is_present("tape") {
-        device::start(
-            matches.value_of("tape").unwrap(),
-            validate(convert(matches.values_of("input"))),
-        )?;
-    } else if let Some(matches) = matches.subcommand_matches("run") {
-        device::start(
-            matches.value_of("tape").unwrap(),
-            validate(convert(matches.values_of("input"))),
-        )?;
+        if matches.is_present("piped") {
+            device::start_piped(
+                matches.value_of("tape").unwrap(),
+                validate(convert(matches.values_of("input"))),
+            )?;
+        } else {
+            device::start(
+                matches.value_of("tape").unwrap(),
+                validate(convert(matches.values_of("input"))),
+            )?;
+        }
     } else if let Some(matches) = matches.subcommand_matches("assemble") {
         assembler::start(
             matches.value_of("file").unwrap(),

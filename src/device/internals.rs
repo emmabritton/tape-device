@@ -1,7 +1,6 @@
 use crate::constants::code::*;
 use crate::constants::hardware::*;
 use crate::constants::{compare, get_byte_count, is_jump_op};
-use crate::device::comm::Input::*;
 use crate::device::comm::Output::*;
 use crate::device::comm::*;
 use crate::device::internals::RunResult::{Breakpoint, EoF, ProgError};
@@ -12,7 +11,6 @@ use random_fast_rng::{FastRng, Random};
 use std::cmp::Ordering;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::mem::swap;
 use std::ops::{BitAnd, BitOr, BitXor, Not};
 
 //Fields are only public for testing
@@ -33,7 +31,6 @@ pub struct Device {
     breakpoints: Vec<u16>,
     rng: FastRng,
     pub keyboard_buffer: Vec<u8>,
-    pub input: Vec<Input>,
     pub output: Vec<Output>,
 }
 
@@ -75,7 +72,6 @@ impl Device {
             files,
             rng: FastRng::new(),
             keyboard_buffer: vec![],
-            input: vec![],
             output: vec![],
         }
     }
@@ -89,11 +85,6 @@ pub struct Flags {
 impl Device {
     ///Execute next instruction
     pub fn step(&mut self, ignore_breakpoints: bool) -> RunResult {
-        let mut msgs = vec![];
-        swap(&mut self.input, &mut msgs);
-        for msg in msgs {
-            self.handle_message(msg);
-        }
         if self.pc as usize >= self.tape_ops.len() {
             return EoF;
         }
@@ -102,31 +93,6 @@ impl Device {
             return Breakpoint;
         }
         self.execute()
-    }
-
-    pub fn handle_message(&mut self, input: Input) {
-        match input {
-            SetBreakpoint(byte) => {
-                self.breakpoints.push(byte);
-            }
-            ClearBreakpoint(byte) => {
-                self.breakpoints.retain(|num| num != &byte);
-            }
-            RequestDump => {
-                self.output.push(Output::Status(self.dump()));
-            }
-            RequestMem(start, end) => {
-                let bytes = &self.mem[start as usize..end as usize];
-                self.output.push(OutputMem(bytes.to_vec(), false));
-            }
-            Stack => {
-                let bytes = &self.mem[self.sp as usize..RAM_SIZE];
-                self.output.push(OutputMem(bytes.to_vec(), true));
-            }
-            Jump(byte) => {
-                self.pc = byte;
-            }
-        }
     }
 
     fn log(&mut self, msg: String) {
@@ -1119,11 +1085,11 @@ impl Device {
         if matches!(reg, REG_ACC | REG_D0 | REG_D1 | REG_D2 | REG_D3) {
             self.stack_push(self.get_reg_content(reg)?);
         } else if reg == REG_A0 {
-            let bytes = self.addr_reg[0].to_be_bytes();
+            let bytes = self.addr_reg[0].to_le_bytes();
             self.sp_add(bytes[0]);
             self.sp_add(bytes[1]);
         } else if reg == REG_A1 {
-            let bytes = self.addr_reg[1].to_be_bytes();
+            let bytes = self.addr_reg[1].to_le_bytes();
             self.sp_add(bytes[0]);
             self.sp_add(bytes[1]);
         } else {

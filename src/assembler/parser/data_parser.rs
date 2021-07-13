@@ -59,7 +59,7 @@ impl DataParser {
             bytes.push(array.len() as u8);
         }
         for array in &self.output {
-            bytes.extend_from_slice(&array)
+            bytes.extend_from_slice(array)
         }
         Ok((bytes, self.output))
     }
@@ -434,15 +434,27 @@ mod test {
 
             let mut parser = DataParser::new();
             parser.run("[[b00001110]]").unwrap();
-            assert_eq!(parser.into_bytes().unwrap(), (vec![1, 1, 14], vec![vec![14]]));
+            assert_eq!(
+                parser.into_bytes().unwrap(),
+                (vec![1, 1, 14], vec![vec![14]])
+            );
 
             let mut parser = DataParser::new();
             parser.run("[[40, 41]]").unwrap();
-            assert_eq!(parser.into_bytes().unwrap(), (vec![1, 2, 40, 41], vec![vec![40, 41]]));
+            assert_eq!(
+                parser.into_bytes().unwrap(),
+                (vec![1, 2, 40, 41], vec![vec![40, 41]])
+            );
 
             let mut parser = DataParser::new();
             parser.run("[['a', 'b'],['c', 'd']]").unwrap();
-            assert_eq!(parser.into_bytes().unwrap(), (vec![2, 2, 2, 97, 98, 99, 100], vec![vec![97, 98], vec![99, 100]]));
+            assert_eq!(
+                parser.into_bytes().unwrap(),
+                (
+                    vec![2, 2, 2, 97, 98, 99, 100],
+                    vec![vec![97, 98], vec![99, 100]]
+                )
+            );
         }
 
         #[test]
@@ -736,11 +748,18 @@ mod test {
             let result = parser.into_bytes().unwrap();
             assert_eq!(
                 result,
-                (vec![
-                    4, 3, 3, 2, 11, 253, 160, 15, 2, 72, 87, 1, 49, 72, 101, 108, 108, 111, 32, 87,
-                    111, 114, 108, 100
-                ],
-                 vec![vec![253, 160, 15], vec![2, 72, 87], vec![1, 49], vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]])
+                (
+                    vec![
+                        4, 3, 3, 2, 11, 253, 160, 15, 2, 72, 87, 1, 49, 72, 101, 108, 108, 111, 32,
+                        87, 111, 114, 108, 100
+                    ],
+                    vec![
+                        vec![253, 160, 15],
+                        vec![2, 72, 87],
+                        vec![1, 49],
+                        vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]
+                    ]
+                )
             );
         }
 

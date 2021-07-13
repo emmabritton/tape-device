@@ -1,4 +1,4 @@
-use crate::assembler::debug_model::{DebugData, DebugString, DebugLabel, DebugModel, DebugOp};
+use crate::assembler::debug_model::{DebugData, DebugLabel, DebugModel, DebugOp, DebugString};
 use crate::assembler::program_model::{
     AddressReplacement, DataModel, LabelModel, OpModel, ProgramModel, StringModel,
 };
@@ -16,13 +16,18 @@ pub fn generate_byte_code(program_model: ProgramModel) -> Result<(Vec<u8>, Debug
     output.push(program_model.version.len() as u8);
     output.extend_from_slice(program_model.version.as_bytes());
 
+    let op_byte_start = output.len() + 2;
+
     let ops_output = generate_ops_bytes(
         &program_model.ops,
-        output.len() + 2,
+        op_byte_start,
         program_model.labels,
         &mut debug_model,
     )?; //+2 for op byte count written once len is known
 
+    //TODO change execution order so data and strings are created first
+    //then when making ops the addresses will be known
+    //and the compiler won't have to make 3 passes to write addresses
     output.extend_from_slice(&(ops_output.bytes.len() as u16).to_be_bytes());
     output.extend_from_slice(&ops_output.bytes);
 
@@ -39,6 +44,15 @@ pub fn generate_byte_code(program_model: ProgramModel) -> Result<(Vec<u8>, Debug
     output = update_addresses(output, ops_output.string_targets, string_addresses);
     output = update_addresses(output, ops_output.data_targets, data_addresses);
     output = update_addresses(output, ops_output.label_targets, ops_output.label_addresses);
+
+    //Copy updates bytes into debug model
+    //This is primarily for copying the string and data addresses
+    let mut final_op_bytes = output[op_byte_start..op_byte_start + ops_output.bytes.len()].to_vec();
+    for op in debug_model.ops.iter_mut() {
+        for byte in op.bytes.iter_mut() {
+            *byte = final_op_bytes.remove(0);
+        }
+    }
 
     Ok((output, debug_model))
 }
@@ -100,7 +114,7 @@ fn generate_ops_bytes(
             let param_offset = get_addr_byte_offset(op.opcode);
             let (key, targets) = match replacement {
                 AddressReplacement::None => panic!("System error: None after a not none check"),
-                AddressReplacement::Label(key) => (key, &mut output.label_targets) ,
+                AddressReplacement::Label(key) => (key, &mut output.label_targets),
                 AddressReplacement::Str(key) => (key, &mut output.string_targets),
                 AddressReplacement::Data(key) => (key, &mut output.data_targets),
             };
@@ -114,7 +128,7 @@ fn generate_ops_bytes(
             op.original_line.clone(),
             op.line_num,
             op.after_processing.clone(),
-            bytes.clone()
+            bytes.clone(),
         ));
         output.bytes.extend_from_slice(&bytes);
     }
@@ -211,11 +225,11 @@ mod test {
         let bytes = vec![PRTS_STR, 0, 0];
         let mut targets = HashMap::new();
         let mut sources = HashMap::new();
-        
+
         targets.insert(String::from("foo"), vec![1]);
         sources.insert(String::from("abc"), 0);
         sources.insert(String::from("foo"), 4);
-        
+
         let output = update_addresses(bytes, targets, sources);
         assert_eq!(output, vec![PRTS_STR, 0, 4]);
     }
@@ -236,19 +250,19 @@ mod test {
             String::from("c"),
             StringModel::new(String::new(), String::from("abcdef"), String::new(), 0),
         );
-        
+
         let (bytes, sources) = generate_string_bytes(strings, &mut DebugModel::default()).unwrap();
         let mut expected = HashMap::new();
         expected.insert(String::from("a"), 0_u16);
         expected.insert(String::from("b"), 12);
         expected.insert(String::from("c"), 23);
-        
+
         assert_eq!(bytes, vec![
             11, 116, 101, 115, 116, 32, 115, 116, 114, 105, 110, 103,
             10, 97, 110, 32, 101, 120, 97, 109, 112, 108, 101,
             6, 97, 98, 99, 100, 101, 102
         ]);
-        
+
         assert_eq!(expected.len(), sources.len());
         assert_eq!(expected.get("a"), sources.get("a"));
         assert_eq!(expected.get("b"), sources.get("b"));
@@ -261,11 +275,11 @@ mod test {
         let mut data = HashMap::new();
         data.insert(
             String::from("a"),
-            DataModel::new(String::new(), vec![2,5,2,1,2,3,4,5,6,7], vec![vec![1,2,3,4,5],vec![6,7]], String::new(), 0),
+            DataModel::new(String::new(), vec![2, 5, 2, 1, 2, 3, 4, 5, 6, 7], vec![vec![1, 2, 3, 4, 5], vec![6, 7]], String::new(), 0),
         );
         data.insert(
             String::from("b"),
-            DataModel::new(String::new(), vec![4,2,2,2,2,97,98,99,100,101,102,103,104], vec![vec![97,98],vec![99,100],vec![101,102],vec![103,104]], String::new(), 0),
+            DataModel::new(String::new(), vec![4, 2, 2, 2, 2, 97, 98, 99, 100, 101, 102, 103, 104], vec![vec![97, 98], vec![99, 100], vec![101, 102], vec![103, 104]], String::new(), 0),
         );
 
         let (bytes, sources) = generate_data_bytes(data, &mut DebugModel::default()).unwrap();
@@ -274,8 +288,8 @@ mod test {
         expected.insert(String::from("b"), 10);
 
         assert_eq!(bytes, vec![
-            2,5,2,1,2,3,4,5,6,7,
-            4,2,2,2,2,97,98,99,100,101,102,103,104
+            2, 5, 2, 1, 2, 3, 4, 5, 6, 7,
+            4, 2, 2, 2, 2, 97, 98, 99, 100, 101, 102, 103, 104
         ]);
 
         assert_eq!(expected.len(), sources.len());
@@ -298,9 +312,9 @@ mod test {
                 ],
                 0,
                 HashMap::new(),
-                &mut DebugModel::default()
+                &mut DebugModel::default(),
             )
-            .unwrap();
+                .unwrap();
 
             let mut expected_strings = HashMap::new();
             expected_strings.insert(String::from("foo"), vec![1_u16]);
@@ -329,7 +343,7 @@ mod test {
             bytes,
             vec![
                 TAPE_HEADER_1, TAPE_HEADER_2, PRG_VERSION,
-                9, 84, 101, 115, 116, 32, 80, 114, 111, 103, 
+                9, 84, 101, 115, 116, 32, 80, 114, 111, 103,
                 3, 49, 46, 48,
                 0, 0,
                 0, 0
@@ -341,13 +355,13 @@ mod test {
     #[rustfmt::skip]
     fn test_simple_prog() {
         let mut model = ProgramModel::new(String::from("a"), String::from("b"));
-        
+
         model.ops.push(OpModel::new(INC_REG, vec![Param::DataReg(REG_D0)], String::new(), String::from("inc d0"), 0));
         model.ops.push(OpModel::new(CPY_REG_REG, vec![Param::DataReg(REG_D1), Param::DataReg(REG_D0)], String::new(), String::from("cpy d1 d0"), 1));
         model.ops.push(OpModel::new(ADD_REG_REG, vec![Param::DataReg(REG_D0), Param::DataReg(REG_D1)], String::new(), String::from("add d0 d1"), 2));
 
         let (bytes, _) = generate_byte_code(model).unwrap();
-        
+
         assert_eq!(
             bytes,
             vec![
@@ -370,7 +384,7 @@ mod test {
 
         model.strings.insert(String::from("abc"), StringModel::new(String::from("abc"), String::from("foo"), String::new(), 0));
         model.strings.insert(String::from("test"), StringModel::new(String::from("test"), String::from("bar"), String::new(), 0));
-        
+
         model.ops.push(OpModel::new(INC_REG, vec![Param::DataReg(REG_D0)], String::new(), String::from("inc d0"), 0));
         model.ops.push(OpModel::new(PRTS_STR, vec![Param::StrKey(String::from("test"))], String::new(), String::from("prts test"), 1));
 
@@ -397,8 +411,8 @@ mod test {
     fn test_simple_prog_with_data() {
         let mut model = ProgramModel::new(String::from("a"), String::from("b"));
 
-        model.data.insert(String::from("dk1"), DataModel::new(String::new(), vec![3,2,2,4,10,11,50,51,97,98,99,100], vec![vec![10,11],vec![50,51],vec![97,98,99,100]],String::new(), 0));
-        model.data.insert(String::from("dk2"), DataModel::new(String::new(), vec![1,10,30,31,32,33,34,35,36,37,38,39], vec![vec![30,31,32,33,34,35,36,37,38,39]],String::new(), 0));
+        model.data.insert(String::from("dk1"), DataModel::new(String::new(), vec![3, 2, 2, 4, 10, 11, 50, 51, 97, 98, 99, 100], vec![vec![10, 11], vec![50, 51], vec![97, 98, 99, 100]], String::new(), 0));
+        model.data.insert(String::from("dk2"), DataModel::new(String::new(), vec![1, 10, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39], vec![vec![30, 31, 32, 33, 34, 35, 36, 37, 38, 39]], String::new(), 0));
 
         model.ops.push(OpModel::new(ADD_REG_REG, vec![Param::DataReg(REG_D0), Param::DataReg(REG_D1)], String::new(), String::from("add d0 d1"), 0));
         model.ops.push(OpModel::new(INC_REG, vec![Param::DataReg(REG_ACC)], String::new(), String::from("inc acc"), 0));
@@ -417,8 +431,8 @@ mod test {
                 INC_REG, REG_ACC,
                 LD_AREG_DATA_VAL_REG, REG_A0, 0, 12, 2, REG_D3,
                 0, 0,
-                3,2,2,4,10,11,50,51,97,98,99,100,
-                1,10,30,31,32,33,34,35,36,37,38,39
+                3, 2, 2, 4, 10, 11, 50, 51, 97, 98, 99, 100,
+                1, 10, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39
             ]
         )
     }
@@ -429,7 +443,7 @@ mod test {
         let mut model = ProgramModel::new(String::from("a"), String::from("b"));
 
         model.strings.insert(String::from("abc"), StringModel::new(String::from("abc"), String::from("foo"), String::new(), 0));
-        model.data.insert(String::from("dk1"), DataModel::new(String::new(), vec![3,2,2,4,10,11,50,51,97,98,99,100],  vec![vec![10,11],vec![50,51], vec![97,98,99,100]],String::new(), 0));
+        model.data.insert(String::from("dk1"), DataModel::new(String::new(), vec![3, 2, 2, 4, 10, 11, 50, 51, 97, 98, 99, 100], vec![vec![10, 11], vec![50, 51], vec![97, 98, 99, 100]], String::new(), 0));
 
         model.ops.push(OpModel::new(ADD_REG_REG, vec![Param::DataReg(REG_D0), Param::DataReg(REG_D1)], String::new(), String::from("add d0 d1"), 0));
         model.ops.push(OpModel::new(INC_REG, vec![Param::DataReg(REG_ACC)], String::new(), String::from("inc acc"), 0));
@@ -451,10 +465,10 @@ mod test {
                 PRTS_STR, 0, 0,
                 0, 4,
                 3, 102, 111, 111,
-                3,2,2,4,10,11,50,51,97,98,99,100
+                3, 2, 2, 4, 10, 11, 50, 51, 97, 98, 99, 100
             ]
         );
-        
+
         assert_eq!(
             model,
             DebugModel::new(
@@ -464,7 +478,7 @@ mod test {
                     DebugOp::new(5, String::from("ld a0 dk1 2 d3"), 1, String::new(), vec![LD_AREG_DATA_VAL_REG, REG_A0, 0, 0, 2, REG_D3]),
                     DebugOp::new(11, String::from("prts abc"), 0, String::new(), vec![PRTS_STR, 0, 0]),
                 ], vec![
-                    DebugString::new(0, String::from("abc"),  String::from("foo"),String::new(), 0)
+                    DebugString::new(0, String::from("abc"), String::from("foo"), String::new(), 0)
                 ], vec![
                     DebugData::new(0, String::from("dk1"), vec![vec![10, 11], vec![50, 51], vec![97, 98, 99, 100]], String::new(), 0)
                 ], vec![])

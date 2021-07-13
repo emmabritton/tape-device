@@ -24,10 +24,9 @@ Commands are sent/received in the format `<prefix><content>` as bytes
 | Set breakpoint | b | address (2 bytes) | `s,451` | `x7301C3` | Sets a breakpoint |
 | Clear breakpoint | c | address (2 bytes) | `c,1` | `x990001` | Clears a breakpoint |
 | Request Dump | d | - | `d` | `x64` | Tells device to send JSON string of registers, etc |
-| Input Key | i | char (1 byte) | `i,T` | `x6954` | Send one key press to device | 
+| Input Key | k | char (1 byte) | `i,T` | `x6954` | Send one key press to device | 
 | Input String | t | String | `t` | `x6954` | Send one key press to device | 
-| Request Memory | m | 2x addr (2 bytes each) | `t` | `x6954` | Send one key press to device | 
-| Request Stack | s | - | `t` | `x6954` | Send one key press to device | 
+| Request Memory | m | 2x addr (2 bytes each) | `t` | `x6954` | Send one key press to device |  
 | Set Memory | n | addr, len, bytes | `n,450,2,4,5` | `x6E01C2..` | Send one key press to device | 
 | Set Register | r | id, value | `r,1,50` | `x720132` | Send one key press to device |  
 | Stop | f | - | `f` | `x66` | Tell Piped Device to finish |  
@@ -40,8 +39,7 @@ Commands are sent/received in the format `<prefix><content>` as bytes
 | Error Output | e | String | `e,5,Crash` | `x65054372..` | Error output from the tape device |
 | Breakpoint hit | h | address (2 bytes) | `h,5` | `x680005` | Sent when 'Step' is sent but there's a breakpoint |
 | Dump output | d | String | `d,200,{"p..` | `xC87B22..` | JSON string of registers, etc |
-| Memory output | m | len,bytes | `m,200,0,0..` | `xC87B22..` | Output of requested memory range |
-| Stack output | s | len,bytes | `s,8,3,10..` | `xC87B22..` | Output of requested stack memory |
+| Memory output | m | len (2 bytes),bytes | `m,200,0,0..` | `xC87B22..` | Output of requested memory range |
 | Key Requested | k | - | `k` | `x6B` | Tape program is waiting for key press |
 | String Requested | t | - | `t` | `x74` | Tape program is waiting for a string |
 | End of program | f | - | `f` | `x66` | Tape program has finished (EoF or HALT) |
@@ -53,25 +51,21 @@ Commands are sent/received in the format `<prefix><content>` as bytes
 
 #### Dump structure
 
-```json
-{
-  "pc": 0,
-  "acc": 0,
-  "sp": 0,
-  "fp": 0,
-  "data_reg": [
-    0,
-    0,
-    0,
-    0
-  ],
-  "addr_reg": [
-    0,
-    0
-  ],
-  "overflowed": false
-}
-```
+|Byte|Len|Name|
+|---|---|---|
+|0|2|`PC`|
+|2|2|`A0`|
+|4|2|`A1`|
+|6|2|`SP`|
+|8|2|`FP`|
+|10|1|`ACC`|
+|11|1|`D0`|
+|12|1|`D1`|
+|13|1|`D2`|
+|14|1|`D3`|
+|15|1|`Overflow` (1 == true)|
+
+First dump should always be `0000 0000 0000 FFFF FFFF 00 00 00 00 00 00`
 
 #### Supported Keys for 'Input Key'
 

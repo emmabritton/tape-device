@@ -82,7 +82,7 @@ pub fn run() -> Result<()> {
                 .takes_value(false)
                 .multiple(false)
                 .required(false)
-                .long("piped")
+                .long("piped"),
         )
         .get_matches();
 

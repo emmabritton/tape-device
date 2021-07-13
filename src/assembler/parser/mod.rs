@@ -158,7 +158,13 @@ pub fn parse_data(program_model: &mut ProgramModel, line: &str, line_num: usize)
         let (content_bytes, debug_bytes) = parser.into_bytes().context(error_msg)?;
         program_model.data.insert(
             key.to_owned(),
-            DataModel::new(key.to_owned(), content_bytes, debug_bytes, line.to_owned(), line_num),
+            DataModel::new(
+                key.to_owned(),
+                content_bytes,
+                debug_bytes,
+                line.to_owned(),
+                line_num,
+            ),
         );
         Ok(())
     } else {
@@ -563,7 +569,7 @@ mod test {
             let mut model = DataModel::new(
                 String::from("dat_numbers"),
                 vec![2, 6, 6, 4, 8, 15, 16, 23, 42, 1, 4, 9, 16, 25, 36],
-                vec![vec![4,8,15,16,23,42],vec![1,4,9,16,25,36]],
+                vec![vec![4, 8, 15, 16, 23, 42], vec![1, 4, 9, 16, 25, 36]],
                 String::from("dat_numbers=[[4, 8, 15 , 16, 23,42],[ 1, 4 ,9, 16, 25, 36 ] ]"),
                 7,
             );
@@ -576,7 +582,7 @@ mod test {
                 Some(&DataModel::new(
                     String::from("dat_chars"),
                     vec![2, 3, 3, 102, 111, 111, 98, 97, 114],
-                    vec![vec![102,111,111],vec![98,97,114]],
+                    vec![vec![102, 111, 111], vec![98, 97, 114]],
                     String::from("dat_chars=[['f', 'o', 'o'] , ['b', 'a', 'r']]"),
                     8
                 ))

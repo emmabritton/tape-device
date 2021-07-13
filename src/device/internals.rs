@@ -28,7 +28,7 @@ pub struct Device {
     pub data_reg: [u8; DATA_REG_COUNT],
     pub addr_reg: [u16; ADDR_REG_COUNT],
     files: Vec<Option<File>>,
-    breakpoints: Vec<u16>,
+    pub breakpoints: Vec<u16>,
     rng: FastRng,
     pub keyboard_buffer: Vec<u8>,
     pub output: Vec<Output>,

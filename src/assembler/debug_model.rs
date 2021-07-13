@@ -10,11 +10,11 @@ pub struct DebugModel {
 
 #[derive(Serialize, Debug, PartialEq)]
 pub struct DebugOp {
-    byte_addr: u16,
+    pub byte_addr: u16,
     original_line: String,
-    line_num: usize,
+    pub line_num: usize,
     processed_line: String,
-    bytes: Vec<u8>
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -23,7 +23,7 @@ pub struct DebugString {
     pub(crate) key: String,
     content: String,
     original_line: String,
-    line_num: usize,
+    pub line_num: usize,
     pub usage: Vec<DebugUsage>,
 }
 
@@ -33,7 +33,7 @@ pub struct DebugData {
     pub(crate) key: String,
     content: Vec<Vec<u8>>,
     original_line: String,
-    line_num: usize,
+    pub line_num: usize,
     pub usage: Vec<DebugUsage>,
 }
 
@@ -50,7 +50,7 @@ pub struct DebugLabel {
 pub struct DebugUsage {
     op_addr: u16,
     offset: u8,
-    line: usize
+    line: usize,
 }
 
 impl DebugModel {
@@ -76,20 +76,26 @@ impl DebugOp {
         original_line: String,
         line_num: usize,
         processed_line: String,
-        bytes: Vec<u8>
+        bytes: Vec<u8>,
     ) -> Self {
         DebugOp {
             byte_addr,
             original_line,
             line_num,
             processed_line,
-            bytes
+            bytes,
         }
     }
 }
 
 impl DebugString {
-    pub fn new(addr: u16, key: String, content: String, original_line: String, line_num: usize) -> Self {
+    pub fn new(
+        addr: u16,
+        key: String,
+        content: String,
+        original_line: String,
+        line_num: usize,
+    ) -> Self {
         DebugString {
             addr,
             key,
@@ -102,7 +108,13 @@ impl DebugString {
 }
 
 impl DebugData {
-    pub fn new(addr: u16, key: String, content: Vec<Vec<u8>>, original_line: String, line_num: usize) -> Self {
+    pub fn new(
+        addr: u16,
+        key: String,
+        content: Vec<Vec<u8>>,
+        original_line: String,
+        line_num: usize,
+    ) -> Self {
         DebugData {
             addr,
             key,
@@ -127,7 +139,13 @@ impl DebugLabel {
 }
 
 impl DebugUsage {
+    //TODO implement usage listing
+    #[allow(dead_code)]
     pub fn new(op_byte: u16, offset: u8, line: usize) -> Self {
-        DebugUsage { op_addr: op_byte, offset, line }
+        DebugUsage {
+            op_addr: op_byte,
+            offset,
+            line,
+        }
     }
 }

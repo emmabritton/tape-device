@@ -265,7 +265,13 @@ impl StringModel {
 }
 
 impl DataModel {
-    pub fn new(key: String, content: Vec<u8>, interpretation: Vec<Vec<u8>>, original_line: String, line_num: usize) -> Self {
+    pub fn new(
+        key: String,
+        content: Vec<u8>,
+        interpretation: Vec<Vec<u8>>,
+        original_line: String,
+        line_num: usize,
+    ) -> Self {
         DataModel {
             key,
             content,
@@ -495,7 +501,7 @@ mod test {
             .is_ok());
         program_model.data.insert(
             String::from("TEST"),
-            DataModel::new(String::from("TEST"), vec![], vec![],String::new(), 0),
+            DataModel::new(String::from("TEST"), vec![], vec![], String::new(), 0),
         );
         let result = program_model.validate_key("test key", "TEST", 0, false);
         assert!(result.is_err());

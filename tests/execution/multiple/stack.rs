@@ -1,6 +1,6 @@
-use crate::{assert_no_output, assert_step_device, setup, assert_memory};
+use crate::{assert_memory, assert_no_output, assert_step_device, setup};
 use tape_device::constants::code::{CALL_ADDR, CALL_AREG, HALT, POP_REG, PUSH_REG, PUSH_VAL, RET};
-use tape_device::constants::hardware::{REG_A1, REG_ACC, REG_D1, REG_A0, REG_D0};
+use tape_device::constants::hardware::{REG_A0, REG_A1, REG_ACC, REG_D0, REG_D1};
 use tape_device::device::internals::RunResult;
 use tape_device::device::Dump;
 
@@ -60,4 +60,3 @@ fn test_multiple_addr_stack_ops() {
 
     assert_no_output(device);
 }
-

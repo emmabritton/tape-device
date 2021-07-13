@@ -42,20 +42,10 @@ tape_device program.tape [input0] [input1]...
 ```
 tape_device assemble program.basm
 ```
-If you're having build issues add `--save-intermediate` to save the assemblers interpretation
-For the debugger add `--save-debug` to save debug data
+If you're having build issues add `--save-intermediate` to save the assemblers interpretation.
+For a debugger add `--save-debug` to save debug data
 
 **Decompile program**
 ```
 tape_device decompile program.tape
 ```
-
-## TODO
-
-- [ ] gui debugger
-    - [ ] register dump
-    - [ ] breakpoints
-    - [ ] step-by-step
-    - [ ] data viewer
-    - [ ] memory viewer
-    - [ ] code insertion/editing?

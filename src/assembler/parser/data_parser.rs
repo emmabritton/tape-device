@@ -41,7 +41,7 @@ enum ValueMode {
 }
 
 impl DataParser {
-    pub fn into_bytes(self) -> Result<Vec<u8>> {
+    pub fn into_bytes(self) -> Result<(Vec<u8>, Vec<Vec<u8>>)> {
         if self.output.len() > MAX_DATA_ARRAY_COUNT {
             return Err(Error::msg(format!(
                 "Too many arrays/string, max {} (e200)",
@@ -58,10 +58,10 @@ impl DataParser {
             }
             bytes.push(array.len() as u8);
         }
-        for array in self.output {
-            bytes.extend_from_slice(&array)
+        for array in &self.output {
+            bytes.extend_from_slice(array)
         }
-        Ok(bytes)
+        Ok((bytes, self.output))
     }
 
     pub fn run(&mut self, content: &str) -> Result<()> {
@@ -115,7 +115,7 @@ impl DataParser {
                 return Err(Error::msg(format!(
                     "Invalid number at char {} (e301)",
                     chr_idx
-                )))
+                )));
             }
         }
         Ok(())
@@ -272,7 +272,7 @@ impl DataParser {
                     return Err(Error::msg(format!(
                         "Unexpected ' at char {} (e307)",
                         chr_idx
-                    )))
+                    )));
                 }
                 ValueMode::Char => match self.current_content.chars().count() {
                     1 => self.current_content.push('\''),
@@ -284,7 +284,7 @@ impl DataParser {
                         return Err(Error::msg(format!(
                             "Unexpected ' at char {} (e308)",
                             chr_idx
-                        )))
+                        )));
                     }
                 },
             },
@@ -296,7 +296,7 @@ impl DataParser {
                     return Err(Error::msg(format!(
                         "Unexpected x at char {} (e309)",
                         chr_idx
-                    )))
+                    )));
                 }
                 ValueMode::Char => self.current_content.push('x'),
             },
@@ -356,7 +356,7 @@ impl DataParser {
                     return Err(Error::msg(format!(
                         "Unexpected {} at char {} (e311)",
                         chr, chr_idx
-                    )))
+                    )));
                 }
                 ValueMode::Char => self.current_content.push(chr),
             },
@@ -430,19 +430,31 @@ mod test {
         fn basic_parsing() {
             let mut parser = DataParser::new();
             parser.run("[[1]]").unwrap();
-            assert_eq!(parser.into_bytes().unwrap(), vec![1, 1, 1]);
+            assert_eq!(parser.into_bytes().unwrap(), (vec![1, 1, 1], vec![vec![1]]));
 
             let mut parser = DataParser::new();
             parser.run("[[b00001110]]").unwrap();
-            assert_eq!(parser.into_bytes().unwrap(), vec![1, 1, 14]);
+            assert_eq!(
+                parser.into_bytes().unwrap(),
+                (vec![1, 1, 14], vec![vec![14]])
+            );
 
             let mut parser = DataParser::new();
             parser.run("[[40, 41]]").unwrap();
-            assert_eq!(parser.into_bytes().unwrap(), vec![1, 2, 40, 41]);
+            assert_eq!(
+                parser.into_bytes().unwrap(),
+                (vec![1, 2, 40, 41], vec![vec![40, 41]])
+            );
 
             let mut parser = DataParser::new();
             parser.run("[['a', 'b'],['c', 'd']]").unwrap();
-            assert_eq!(parser.into_bytes().unwrap(), vec![2, 2, 2, 97, 98, 99, 100]);
+            assert_eq!(
+                parser.into_bytes().unwrap(),
+                (
+                    vec![2, 2, 2, 97, 98, 99, 100],
+                    vec![vec![97, 98], vec![99, 100]]
+                )
+            );
         }
 
         #[test]
@@ -736,10 +748,18 @@ mod test {
             let result = parser.into_bytes().unwrap();
             assert_eq!(
                 result,
-                [
-                    4, 3, 3, 2, 11, 253, 160, 15, 2, 72, 87, 1, 49, 72, 101, 108, 108, 111, 32, 87,
-                    111, 114, 108, 100
-                ]
+                (
+                    vec![
+                        4, 3, 3, 2, 11, 253, 160, 15, 2, 72, 87, 1, 49, 72, 101, 108, 108, 111, 32,
+                        87, 111, 114, 108, 100
+                    ],
+                    vec![
+                        vec![253, 160, 15],
+                        vec![2, 72, 87],
+                        vec![1, 49],
+                        vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]
+                    ]
+                )
             );
         }
 

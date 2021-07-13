@@ -194,6 +194,7 @@ pub fn get_byte_count(opcode: u8) -> usize {
     }
 }
 
+//TODO I don't think this should have values for _AREG ops
 pub fn get_addr_byte_offset(opcode: u8) -> usize {
     match opcode {
         JMP_ADDR | JMP_AREG | JE_ADDR | JE_AREG | JL_ADDR | JL_AREG | JNE_ADDR | JNE_AREG

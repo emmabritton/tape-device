@@ -55,6 +55,7 @@ pub struct StringModel {
 pub struct DataModel {
     pub key: String,
     pub content: Vec<u8>,
+    pub interpretation: Vec<Vec<u8>>,
     pub definition: Definition,
     pub usage: Vec<Usage>,
 }
@@ -264,10 +265,17 @@ impl StringModel {
 }
 
 impl DataModel {
-    pub fn new(key: String, content: Vec<u8>, original_line: String, line_num: usize) -> Self {
+    pub fn new(
+        key: String,
+        content: Vec<u8>,
+        interpretation: Vec<Vec<u8>>,
+        original_line: String,
+        line_num: usize,
+    ) -> Self {
         DataModel {
             key,
             content,
+            interpretation,
             definition: Definition::new(original_line, line_num),
             usage: vec![],
         }
@@ -493,7 +501,7 @@ mod test {
             .is_ok());
         program_model.data.insert(
             String::from("TEST"),
-            DataModel::new(String::from("TEST"), vec![], String::new(), 0),
+            DataModel::new(String::from("TEST"), vec![], vec![], String::new(), 0),
         );
         let result = program_model.validate_key("test key", "TEST", 0, false);
         assert!(result.is_err());
@@ -706,6 +714,7 @@ mod test {
         let mut d_model = DataModel::new(
             String::from("d_key"),
             vec![1, 1, 1],
+            vec![vec![1]],
             String::from("d_key=[[1]]"),
             6,
         );
@@ -746,6 +755,6 @@ mod test {
             12,
         ));
 
-        assert_eq!(serde_json::to_string(&model).unwrap(), String::from("{\"name\":\"prog name\",\"version\":\"ver1\",\"strings\":{\"s_key\":{\"key\":\"s_key\",\"content\":\"example string\",\"definition\":{\"original_line\":\"s_key=example string\",\"line_num\":3},\"usage\":[{\"original_line\":\"prts s_key\",\"line_num\":10}]}},\"data\":{\"d_key\":{\"key\":\"d_key\",\"content\":[1,1,1],\"definition\":{\"original_line\":\"d_key=[[1]]\",\"line_num\":6},\"usage\":[{\"original_line\":\"ld foo d_key 0 0\",\"line_num\":11}]}},\"constants\":{\"foo\":{\"key\":\"foo\",\"content\":\"a1\",\"definition\":{\"original_line\":\"const foo a1\",\"line_num\":8},\"usage\":[{\"original_line\":\"ld foo d_key 0 0\",\"line_num\":11}]}},\"ops\":[{\"opcode\":147,\"params\":[{\"StrKey\":\"s_key\"}],\"after_processing\":\"prts s_key\",\"original_line\":\"prts s_key\",\"line_num\":10},{\"opcode\":71,\"params\":[{\"AddrReg\":33},{\"DataKey\":\"d_key\"},{\"Number\":0},{\"Number\":0}],\"after_processing\":\"ld a1 d_key 0 0\",\"original_line\":\"ld foo d_key 0 0\",\"line_num\":11},{\"opcode\":32,\"params\":[{\"Label\":\"lbl\"}],\"after_processing\":\"jmp lbl\",\"original_line\":\"jmp lbl\",\"line_num\":12}],\"labels\":{\"lbl\":{\"key\":\"lbl\",\"definition\":{\"original_line\":\"lbl:\",\"line_num\":7},\"usage\":[{\"original_line\":\"jmp lbl\",\"line_num\":12}]}}}"));
+        assert_eq!(serde_json::to_string(&model).unwrap(), String::from("{\"name\":\"prog name\",\"version\":\"ver1\",\"strings\":{\"s_key\":{\"key\":\"s_key\",\"content\":\"example string\",\"definition\":{\"original_line\":\"s_key=example string\",\"line_num\":3},\"usage\":[{\"original_line\":\"prts s_key\",\"line_num\":10}]}},\"data\":{\"d_key\":{\"key\":\"d_key\",\"content\":[1,1,1],\"interpretation\":[[1]],\"definition\":{\"original_line\":\"d_key=[[1]]\",\"line_num\":6},\"usage\":[{\"original_line\":\"ld foo d_key 0 0\",\"line_num\":11}]}},\"constants\":{\"foo\":{\"key\":\"foo\",\"content\":\"a1\",\"definition\":{\"original_line\":\"const foo a1\",\"line_num\":8},\"usage\":[{\"original_line\":\"ld foo d_key 0 0\",\"line_num\":11}]}},\"ops\":[{\"opcode\":147,\"params\":[{\"StrKey\":\"s_key\"}],\"after_processing\":\"prts s_key\",\"original_line\":\"prts s_key\",\"line_num\":10},{\"opcode\":71,\"params\":[{\"AddrReg\":33},{\"DataKey\":\"d_key\"},{\"Number\":0},{\"Number\":0}],\"after_processing\":\"ld a1 d_key 0 0\",\"original_line\":\"ld foo d_key 0 0\",\"line_num\":11},{\"opcode\":32,\"params\":[{\"Label\":\"lbl\"}],\"after_processing\":\"jmp lbl\",\"original_line\":\"jmp lbl\",\"line_num\":12}],\"labels\":{\"lbl\":{\"key\":\"lbl\",\"definition\":{\"original_line\":\"lbl:\",\"line_num\":7},\"usage\":[{\"original_line\":\"jmp lbl\",\"line_num\":12}]}}}"));
     }
 }

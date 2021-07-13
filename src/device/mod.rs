@@ -1,7 +1,9 @@
 pub mod internals;
+mod piped_device;
 mod std_device;
 
 use crate::constants::hardware::{ADDR_REG_COUNT, DATA_REG_COUNT, RAM_SIZE};
+use crate::device::piped_device::PipedDevice;
 use crate::device::std_device::StdDevice;
 use crate::tape_reader::read_tape;
 use anyhow::Result;
@@ -22,24 +24,25 @@ pub fn start(path: &str, input_paths: Vec<&str>) -> Result<()> {
     Ok(())
 }
 
-pub mod comm {
-    use crate::device::Dump;
+pub fn start_piped(path: &str, input_paths: Vec<&str>) -> Result<()> {
+    let tape = read_tape(path)?;
 
+    let mut device = PipedDevice::new(
+        tape.ops,
+        tape.strings,
+        tape.data,
+        input_paths.iter().map(|str| str.to_string()).collect(),
+    );
+    device.run();
+
+    Ok(())
+}
+
+pub mod comm {
     pub enum Output {
         OutputStd(String),
         OutputErr(String),
         BreakpointHit(u16),
-        Status(Dump),
-        OutputMem(Vec<u8>, bool), //bytes, is stack
-    }
-
-    pub enum Input {
-        SetBreakpoint(u16),
-        ClearBreakpoint(u16),
-        RequestDump,
-        RequestMem(u16, u16), //start, end
-        Stack,
-        Jump(u16),
     }
 }
 

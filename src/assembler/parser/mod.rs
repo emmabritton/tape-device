@@ -155,10 +155,16 @@ pub fn parse_data(program_model: &mut ProgramModel, line: &str, line_num: usize)
         let mut parser = DataParser::new();
         let error_msg = format!("Data definition on line {}: \"{}\"", line_num, line);
         parser.run(content).context(error_msg.clone())?;
-        let bytes = parser.into_bytes().context(error_msg)?;
+        let (content_bytes, debug_bytes) = parser.into_bytes().context(error_msg)?;
         program_model.data.insert(
             key.to_owned(),
-            DataModel::new(key.to_owned(), bytes, line.to_owned(), line_num),
+            DataModel::new(
+                key.to_owned(),
+                content_bytes,
+                debug_bytes,
+                line.to_owned(),
+                line_num,
+            ),
         );
         Ok(())
     } else {
@@ -324,8 +330,8 @@ mod test {
             let mut program_model = ProgramModel::new(String::new(), String::new());
             #[rustfmt::skip]
                 let data = vec![
-                ("key", "key=[[10]]", 3, DataModel::new(String::from("key"), vec![1, 1, 10], String::from("key=[[10]]"), 3)),
-                ("ex", "ex=[ [ x1, x2 ] , [ 3, 'a'] ]", 4, DataModel::new(String::from("ex"), vec![2, 2, 2, 1, 2, 3, 97], String::from("ex=[ [ x1, x2 ] , [ 3, 'a'] ]"), 4))
+                ("key", "key=[[10]]", 3, DataModel::new(String::from("key"), vec![1, 1, 10], vec![vec![10]],String::from("key=[[10]]"), 3)),
+                ("ex", "ex=[ [ x1, x2 ] , [ 3, 'a'] ]", 4, DataModel::new(String::from("ex"), vec![2, 2, 2, 1, 2, 3, 97], vec![vec![1,2],vec![3,97]],String::from("ex=[ [ x1, x2 ] , [ 3, 'a'] ]"), 4))
             ];
 
             for entry in data {
@@ -563,6 +569,7 @@ mod test {
             let mut model = DataModel::new(
                 String::from("dat_numbers"),
                 vec![2, 6, 6, 4, 8, 15, 16, 23, 42, 1, 4, 9, 16, 25, 36],
+                vec![vec![4, 8, 15, 16, 23, 42], vec![1, 4, 9, 16, 25, 36]],
                 String::from("dat_numbers=[[4, 8, 15 , 16, 23,42],[ 1, 4 ,9, 16, 25, 36 ] ]"),
                 7,
             );
@@ -575,6 +582,7 @@ mod test {
                 Some(&DataModel::new(
                     String::from("dat_chars"),
                     vec![2, 3, 3, 102, 111, 111, 98, 97, 114],
+                    vec![vec![102, 111, 111], vec![98, 97, 114]],
                     String::from("dat_chars=[['f', 'o', 'o'] , ['b', 'a', 'r']]"),
                     8
                 ))

@@ -62,8 +62,6 @@ impl StdDevice {
                             .expect("Error setting foreground color");
                     }
                     Output::BreakpointHit(_) => panic!("Encountered and stopped for breakpoint"),
-                    Output::Status(_) => panic!("Unexpected system dump"),
-                    Output::OutputMem(_, _) => panic!("Unexpected system memory"),
                 }
             }
         }

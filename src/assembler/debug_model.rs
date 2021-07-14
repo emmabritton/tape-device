@@ -139,8 +139,6 @@ impl DebugLabel {
 }
 
 impl DebugUsage {
-    //TODO implement usage listing
-    #[allow(dead_code)]
     pub fn new(op_byte: u16, offset: u8, line: usize) -> Self {
         DebugUsage {
             op_addr: op_byte,

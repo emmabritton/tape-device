@@ -149,21 +149,7 @@ pub fn collect_jump_targets(ops: &[u8]) -> Vec<usize> {
             break;
         }
         let op = ops[pc];
-        if matches!(
-            op,
-            JMP_ADDR
-                | JE_ADDR
-                | JNE_ADDR
-                | JL_ADDR
-                | JG_ADDR
-                | OVER_ADDR
-                | NOVER_ADDR
-                | CALL_ADDR
-                | FCHK_REG_ADDR
-                | FCHK_VAL_ADDR
-                | IPOLL_ADDR
-        ) {
-            let offset = get_addr_byte_offset(op);
+        if let Some(offset) = get_addr_byte_offset(op) {
             let addr = u16::from_be_bytes([ops[pc + offset], ops[pc + offset + 1]]) as usize;
             jmp_target.push(addr);
         }

@@ -2,7 +2,7 @@ use crate::assembler::debug_model::{DebugData, DebugLabel, DebugModel, DebugOp, 
 use crate::assembler::program_model::{
     AddressReplacement, DataModel, LabelModel, OpModel, ProgramModel, StringModel,
 };
-use crate::constants::get_addr_byte_offset;
+use crate::constants::{get_addr_byte_offset, get_byte_count};
 use crate::constants::hardware::{MAX_DATA_BYTES, MAX_STRING_BYTES};
 use crate::constants::system::{PRG_VERSION, TAPE_HEADER_1, TAPE_HEADER_2};
 use anyhow::{Error, Result};
@@ -40,9 +40,9 @@ pub fn generate_byte_code(program_model: ProgramModel) -> Result<(Vec<u8>, Debug
     output.extend_from_slice(&ops_output.bytes);
 
     //Now all label positions are known, update addresses
-    output = update_addresses(output, ops_output.label_targets, ops_output.label_addresses);
+    output = update_addresses(output, ops_output.label_targets, ops_output.label_addresses, op_byte_start, &mut debug_model);
 
-    //Write string len, bytes and data bytes
+    //Write string len, string bytes and data bytes
     output.extend_from_slice(&(string_bytes.len() as u16).to_be_bytes());
     output.extend_from_slice(&string_bytes);
     output.extend_from_slice(&data_bytes);
@@ -50,10 +50,17 @@ pub fn generate_byte_code(program_model: ProgramModel) -> Result<(Vec<u8>, Debug
     Ok((output, debug_model))
 }
 
+/// Replace placeholder address bytes with actual values
+/// * `bytes`: The list of bytes to update
+/// * `targets`: The indexes of bytes in `bytes` to update, mapped by a string key
+/// * `sources`: The actual values to write at the indexes in `targets`, mapped by a string key
+/// * `op_byte_start`: Index of the first op byte
 fn update_addresses(
     mut bytes: Vec<u8>,
     targets: HashMap<String, Vec<u16>>,
     sources: HashMap<String, u16>,
+    op_byte_start: usize,
+    debug: &mut DebugModel
 ) -> Vec<u8> {
     for (key, source) in sources {
         if let Some(op_offsets) = targets.get(&key) {
@@ -61,6 +68,13 @@ fn update_addresses(
                 let addr = source.to_be_bytes();
                 bytes[*offset as usize] = addr[0];
                 bytes[(*offset + 1) as usize] = addr[1];
+                let op_offset = *offset - (op_byte_start as u16);
+                let debug_op = debug.ops.iter_mut()
+                    .find(|op| op.byte_addr < op_offset && op_offset < op.byte_addr + get_byte_count(op.bytes[0]) as u16)
+                    .expect(&format!("No DebugOp found but label target exists for '{}', targets: {:?}", key, op_offsets));
+                let local_offset = op_offset - debug_op.byte_addr;
+                debug_op.bytes[local_offset as usize] = addr[0];
+                debug_op.bytes[(local_offset + 1) as usize] = addr[1];
             }
         }
     }
@@ -104,7 +118,7 @@ fn generate_ops_bytes(
         }
         let (mut bytes, replacement) = op.to_bytes();
         if replacement != AddressReplacement::None {
-            let param_offset = get_addr_byte_offset(op.opcode);
+            let param_offset = get_addr_byte_offset(op.opcode).expect(&format!("AddressReplacement found for op with no addr byte offset for line {}", op.line_num));
             match replacement {
                 AddressReplacement::None => panic!("Assembler error: None after a not none check"),
                 AddressReplacement::Label(key) => {
@@ -248,7 +262,7 @@ mod test {
         sources.insert(String::from("abc"), 0);
         sources.insert(String::from("foo"), 4);
 
-        let output = update_addresses(bytes, targets, sources);
+        let output = update_addresses(bytes, targets, sources, 0,&mut DebugModel::new(vec![], vec![], vec![], vec![]));
         assert_eq!(output, vec![PRTS_STR, 0, 4]);
     }
 

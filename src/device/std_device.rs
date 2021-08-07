@@ -1,10 +1,10 @@
 use crate::device::comm::Output;
+use crate::device::input::{read_char, read_str};
 use crate::device::internals::{Device, RunResult};
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
 use crossterm::ExecutableCommand;
 use std::io::stdout;
 use std::mem::swap;
-use crate::device::input::{read_char, read_str};
 
 pub struct StdDevice {
     device: Device,

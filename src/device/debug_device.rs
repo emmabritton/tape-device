@@ -1,19 +1,19 @@
+use crate::assembler::debug_model::DebugModel;
+use crate::constants::code::RET;
+use crate::constants::{get_addr_byte_offset, is_jump_op};
 use crate::device::comm::Output;
 use crate::device::internals::{Device, RunResult};
+use crate::device::util::{convert_and_fit, fit_in_lines};
+use crate::device::Dump;
 use anyhow::Result;
+use crossterm::cursor::{Hide, MoveToColumn, MoveToPreviousLine, Show};
 use crossterm::event::{Event, KeyCode, KeyModifiers};
+use crossterm::style::Styler;
+use crossterm::terminal::{Clear, ClearType};
 use crossterm::ExecutableCommand;
 use std::io::stdout;
-use crate::assembler::debug_model::DebugModel;
-use std::time::Duration;
-use crossterm::cursor::{Hide, Show, MoveToPreviousLine, MoveToColumn};
-use crossterm::terminal::{Clear, ClearType};
-use crate::device::util::{fit_in_lines, convert_and_fit};
-use crate::device::Dump;
 use std::thread::sleep;
-use crate::constants::{get_addr_byte_offset, is_jump_op};
-use crate::constants::code::RET;
-use crossterm::style::Styler;
+use std::time::Duration;
 
 pub struct DebugDevice {
     device: Device,
@@ -32,7 +32,7 @@ pub struct DebugDevice {
     print_help: bool,
     print_history: bool,
     auto_run: bool,
-    history: Vec<Option<History>>
+    history: Vec<Option<History>>,
 }
 
 #[derive(Debug)]
@@ -41,16 +41,15 @@ struct History {
     byte_addr: u16,
     bytes: Vec<u8>,
     line: String,
-    previous: PreviousType
+    previous: PreviousType,
 }
 
 #[derive(Debug, PartialEq)]
 enum PreviousType {
     Other,
     Jump,
-    Return
+    Return,
 }
-
 
 pub fn setup_terminal() -> Result<()> {
     let default_panic = std::panic::take_hook();
@@ -68,18 +67,30 @@ pub fn setup_terminal() -> Result<()> {
 pub fn shutdown_terminal() {
     let result = crossterm::terminal::disable_raw_mode();
     if let Err(err) = result {
-        eprintln!("Failed to disable raw mode, you'll need to close this terminal window:\n{}", err);
+        eprintln!(
+            "Failed to disable raw mode, you'll need to close this terminal window:\n{}",
+            err
+        );
     }
     let mut stdout = stdout();
     let result = stdout.execute(Show);
     if let Err(err) = result {
-        eprintln!("Failed to restore cursor, you'll need to close this terminal window:\n{}", err);
+        eprintln!(
+            "Failed to restore cursor, you'll need to close this terminal window:\n{}",
+            err
+        );
     }
     println!("\n\n");
 }
 
 impl DebugDevice {
-    pub fn new(ops: Vec<u8>, strings: Vec<u8>, data: Vec<u8>, debug_info: DebugModel, data_files: Vec<String>) -> Self {
+    pub fn new(
+        ops: Vec<u8>,
+        strings: Vec<u8>,
+        data: Vec<u8>,
+        debug_info: DebugModel,
+        data_files: Vec<String>,
+    ) -> Self {
         DebugDevice {
             device: Device::new(ops, strings, data, data_files),
             debug: debug_info,
@@ -97,7 +108,7 @@ impl DebugDevice {
             print_help: false,
             print_history: false,
             auto_run: false,
-            history: vec![]
+            history: vec![],
         }
     }
 }
@@ -118,9 +129,11 @@ impl DebugDevice {
                                 self.add_history(pc);
                             }
                         }
-                    },
+                    }
                     Input::SetBreakpoint(byte) => self.device.breakpoints.push(byte),
-                    Input::ClearBreakpoint(byte) => remove_if_present(&mut self.device.breakpoints, &byte),
+                    Input::ClearBreakpoint(byte) => {
+                        remove_if_present(&mut self.device.breakpoints, &byte)
+                    }
                     Input::Char(chr) => {
                         self.device.keyboard_buffer.push(chr as u8);
                         self.state = DebuggerState::Ready;
@@ -131,16 +144,18 @@ impl DebugDevice {
                                 self.add_history(pc);
                             }
                         }
-                    },
+                    }
                     Input::Text(str) => {
-                        self.device.keyboard_buffer.extend_from_slice(str.as_bytes());
+                        self.device
+                            .keyboard_buffer
+                            .extend_from_slice(str.as_bytes());
                         self.state = DebuggerState::Ready;
                         let pc = self.device.pc;
                         self.last_run_result = self.device.step(true);
                         if should_add_history(&self.last_run_result) && pc != self.device.pc {
                             self.add_history(pc);
                         }
-                    },
+                    }
                     Input::Terminate => return Ok(()),
                     Input::Toggle16BitDisplay => self.hex_16bit = !self.hex_16bit,
                     Input::Toggle8BitDisplay => self.hex_8bit = !self.hex_8bit,
@@ -175,16 +190,15 @@ impl DebugDevice {
                 RunResult::EoF | RunResult::Halt | RunResult::ProgError => {
                     self.state = DebuggerState::ProgEnd;
                     self.redraw = true;
-                },
+                }
                 RunResult::CharInputRequested => {
                     if self.state != DebuggerState::WaitingForChar {
-                    self.state = DebuggerState::WaitingForChar;
-                    self.redraw = true;
-                        }
+                        self.state = DebuggerState::WaitingForChar;
+                        self.redraw = true;
+                    }
                 }
                 RunResult::StringInputRequested => {
                     if let DebuggerState::WaitingForString(_) = self.state {
-
                     } else {
                         self.state = DebuggerState::WaitingForString(String::new());
                         self.redraw = true;
@@ -198,7 +212,9 @@ impl DebugDevice {
         if crossterm::event::poll(Duration::from_millis(10)).unwrap_or(false) {
             match crossterm::event::read()? {
                 Event::Key(key) => {
-                    if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    if key.code == KeyCode::Char('c')
+                        && key.modifiers.contains(KeyModifiers::CONTROL)
+                    {
                         return Ok(Some(Input::Terminate));
                     }
                     if key.code == KeyCode::Esc && key.modifiers == KeyModifiers::empty() {
@@ -207,10 +223,10 @@ impl DebugDevice {
                                 if self.auto_run {
                                     self.auto_run = false;
                                 } else {
-                                    return Ok(Some(Input::Terminate))
+                                    return Ok(Some(Input::Terminate));
                                 }
-                            },
-                            _ => self.state = DebuggerState::Ready
+                            }
+                            _ => self.state = DebuggerState::Ready,
                         }
                         self.redraw = true;
                         return Ok(None);
@@ -219,11 +235,13 @@ impl DebugDevice {
                     match &self.state {
                         DebuggerState::Ready => {
                             if let KeyCode::Char('b') = key.code {
-                                self.state = DebuggerState::WaitingForBreakpointLineToSet(String::new());
+                                self.state =
+                                    DebuggerState::WaitingForBreakpointLineToSet(String::new());
                                 self.redraw = true;
                                 return Ok(None);
                             } else if let KeyCode::Char('u') = key.code {
-                                self.state = DebuggerState::WaitingForBreakpointLineToClear(String::new());
+                                self.state =
+                                    DebuggerState::WaitingForBreakpointLineToClear(String::new());
                                 self.redraw = true;
                                 return Ok(None);
                             } else if let KeyCode::Char('t') = key.code {
@@ -245,7 +263,7 @@ impl DebugDevice {
                                 KeyCode::Char('h') => Some(Input::Help),
                                 KeyCode::Char('y') => Some(Input::ExecutionHistory),
                                 KeyCode::Char('a') => Some(Input::ToggleAutoRun),
-                                _ => None
+                                _ => None,
                             };
                             return Ok(input);
                         }
@@ -286,12 +304,15 @@ impl DebugDevice {
                         }
                         DebuggerState::WaitingForBreakpointLineToSet(line) => {
                             match key.code {
-                                KeyCode::Char(chr) => if chr >= '0' && chr <= '9' {
-                                    let mut num = line.clone();
-                                    num.push(chr);
-                                    self.state = DebuggerState::WaitingForBreakpointLineToSet(num);
-                                    self.redraw = true;
-                                },
+                                KeyCode::Char(chr) => {
+                                    if chr >= '0' && chr <= '9' {
+                                        let mut num = line.clone();
+                                        num.push(chr);
+                                        self.state =
+                                            DebuggerState::WaitingForBreakpointLineToSet(num);
+                                        self.redraw = true;
+                                    }
+                                }
                                 KeyCode::Enter => {
                                     if let Ok(num) = line.parse::<usize>() {
                                         let byte_addr = self.debug.byte_for_line(num);
@@ -310,7 +331,8 @@ impl DebugDevice {
                                     if !line.is_empty() {
                                         let mut new_line = line.clone();
                                         new_line.truncate(line.len() - 1);
-                                        self.state = DebuggerState::WaitingForBreakpointLineToSet(new_line);
+                                        self.state =
+                                            DebuggerState::WaitingForBreakpointLineToSet(new_line);
                                         self.redraw = true;
                                     }
                                 }
@@ -320,12 +342,15 @@ impl DebugDevice {
                         }
                         DebuggerState::WaitingForBreakpointLineToClear(line) => {
                             match key.code {
-                                KeyCode::Char(chr) => if chr >= '0' && chr <= '9' {
-                                    let mut num = line.clone();
-                                    num.push(chr);
-                                    self.state = DebuggerState::WaitingForBreakpointLineToClear(num);
-                                    self.redraw = true;
-                                },
+                                KeyCode::Char(chr) => {
+                                    if chr >= '0' && chr <= '9' {
+                                        let mut num = line.clone();
+                                        num.push(chr);
+                                        self.state =
+                                            DebuggerState::WaitingForBreakpointLineToClear(num);
+                                        self.redraw = true;
+                                    }
+                                }
                                 KeyCode::Enter => {
                                     if let Ok(num) = line.parse::<usize>() {
                                         let byte_addr = self.debug.byte_for_line(num);
@@ -344,7 +369,9 @@ impl DebugDevice {
                                     if !line.is_empty() {
                                         let mut new_line = line.clone();
                                         new_line.truncate(line.len() - 1);
-                                        self.state = DebuggerState::WaitingForBreakpointLineToClear(new_line);
+                                        self.state = DebuggerState::WaitingForBreakpointLineToClear(
+                                            new_line,
+                                        );
                                         self.redraw = true;
                                     }
                                 }
@@ -361,14 +388,14 @@ impl DebugDevice {
                                 KeyCode::Char('i') => Some(Input::Info),
                                 KeyCode::Char('h') => Some(Input::Help),
                                 KeyCode::Char('y') => Some(Input::ExecutionHistory),
-                                _ => None
+                                _ => None,
                             };
                             return Ok(input);
                         }
                     }
                 }
                 Event::Mouse(_) => {}
-                Event::Resize(_, _) => { }
+                Event::Resize(_, _) => {}
             }
         }
         Ok(None)
@@ -400,7 +427,7 @@ impl DebugDevice {
                 byte_addr: op.byte_addr,
                 bytes: op.bytes.clone(),
                 line: op.processed_line.clone(),
-                previous: last_op_type
+                previous: last_op_type,
             }));
         } else {
             self.history.push(None);
@@ -417,11 +444,11 @@ impl DebugDevice {
                         Output::OutputStd(str) => {
                             print!("{}", str);
                             newline_printed = str.ends_with('\n');
-                        },
+                        }
                         Output::OutputErr(err) => {
                             stdout().execute(MoveToColumn(0))?;
                             eprintln!("Error: {}", err)
-                        },
+                        }
                         Output::BreakpointHit(_) => {}
                     }
                 }
@@ -433,17 +460,20 @@ impl DebugDevice {
             }
             self.device.output.clear();
             if self.print_history {
-                println!("{}","  Line  Addr  Bytes             Src".bold());
+                println!("{}", "  Line  Addr  Bytes             Src".bold());
                 for op in &self.history {
                     stdout().execute(MoveToColumn(0))?;
                     if let Some(op) = op {
                         let jmp = match op.previous {
                             PreviousType::Other => ' ',
                             PreviousType::Jump => '>',
-                            PreviousType::Return => '<'
+                            PreviousType::Return => '<',
                         };
                         let bytes = format_instruction(&op.bytes, true, true, false);
-                        println!("{} {: <5} {:04X}  {: <17} {}", jmp, op.line_num, op.byte_addr, bytes, op.line);
+                        println!(
+                            "{} {: <5} {:04X}  {: <17} {}",
+                            jmp, op.line_num, op.byte_addr, bytes, op.line
+                        );
                     } else {
                         println!("??? Unknown instruction was executed");
                     }
@@ -452,7 +482,10 @@ impl DebugDevice {
             let (cols, _) = crossterm::terminal::size()?;
             let mut footer = self.gen_footer(cols as usize)?;
             if let Some((start, end)) = self.ui_memory {
-                let bytes = self.device.mem[start as usize..end as usize].iter().map(|byte| format_8bit(*byte, self.hex_8bit, self.dump_chars)).collect::<Vec<String>>();
+                let bytes = self.device.mem[start as usize..end as usize]
+                    .iter()
+                    .map(|byte| format_8bit(*byte, self.hex_8bit, self.dump_chars))
+                    .collect::<Vec<String>>();
                 footer.extend_from_slice(&fit_in_lines(bytes, cols as usize));
             }
             if self.print_info {
@@ -461,28 +494,33 @@ impl DebugDevice {
                         &format!("8bit values as hex: {}", self.hex_8bit),
                         &format!("16bit values as hex: {}", self.hex_16bit),
                         &format!("show ASCII for registers: {}", self.dump_chars),
-                        &format!("show original line: {}", self.original_line)
-                    ], cols as usize, "   "
+                        &format!("show original line: {}", self.original_line),
+                    ],
+                    cols as usize,
+                    "   ",
                 ));
             }
             if self.print_help {
                 footer.extend_from_slice(&convert_and_fit(
-                vec![
-                    "space) Step",
-                    "ctrl+c) quit",
-                    "esc) leave text entry modes or stop auto-run",
-                    "8) Toggle dec/hex for 8bit",
-                    "6) Toggle dec/hex for 16it",
-                    "i) Print debugger info",
-                    "c) Toggle printing ASCII chars",
-                    "l) Toggle printing original line",
-                    "b) Set breakpoint",
-                    "u) Clear breakpoint",
-                    "h) Print help",
-                    "y) Print execution history",
-                    "t) Input char",
-                    "s) Input string",
-                ], cols as usize, "   "));
+                    vec![
+                        "space) Step",
+                        "ctrl+c) quit",
+                        "esc) leave text entry modes or stop auto-run",
+                        "8) Toggle dec/hex for 8bit",
+                        "6) Toggle dec/hex for 16it",
+                        "i) Print debugger info",
+                        "c) Toggle printing ASCII chars",
+                        "l) Toggle printing original line",
+                        "b) Set breakpoint",
+                        "u) Clear breakpoint",
+                        "h) Print help",
+                        "y) Print execution history",
+                        "t) Input char",
+                        "s) Input string",
+                    ],
+                    cols as usize,
+                    "   ",
+                ));
             }
             self.footer_height = footer.len() as u16;
             for line in footer {
@@ -502,26 +540,57 @@ impl DebugDevice {
         lines.push(format!("{1:-<0$}", cols, "-"));
         let status_value = match (&self.last_run_result, &self.state) {
             (RunResult::Pause, DebuggerState::Ready) => String::from("Ready"),
-            (RunResult::Pause, DebuggerState::WaitingForBreakpointLineToSet(num)) => format!("Enter breakpoint line num to set (esc to cancel): {}              ", num),
-            (RunResult::Pause, DebuggerState::WaitingForBreakpointLineToClear(num)) => format!("Enter breakpoint line num to clear (esc to cancel): {}            ", num),
-            (RunResult::StringInputRequested, DebuggerState::WaitingForString(str)) => format!("Enter a string (and then press enter): {}", str),
-            (RunResult::StringInputRequested, DebuggerState::Ready) => String::from("Waiting for string input"),
-            (RunResult::Pause, DebuggerState::WaitingForChar) => String::from("Press any valid key"),
-            (RunResult::CharInputRequested, DebuggerState::WaitingForChar) => String::from("Press any valid key"),
-            (RunResult::CharInputRequested, DebuggerState::Ready) => String::from("Waiting for character input"),
+            (RunResult::Pause, DebuggerState::WaitingForBreakpointLineToSet(num)) => format!(
+                "Enter breakpoint line num to set (esc to cancel): {}              ",
+                num
+            ),
+            (RunResult::Pause, DebuggerState::WaitingForBreakpointLineToClear(num)) => format!(
+                "Enter breakpoint line num to clear (esc to cancel): {}            ",
+                num
+            ),
+            (RunResult::StringInputRequested, DebuggerState::WaitingForString(str)) => {
+                format!("Enter a string (and then press enter): {}", str)
+            }
+            (RunResult::StringInputRequested, DebuggerState::Ready) => {
+                String::from("Waiting for string input")
+            }
+            (RunResult::Pause, DebuggerState::WaitingForChar) => {
+                String::from("Press any valid key")
+            }
+            (RunResult::CharInputRequested, DebuggerState::WaitingForChar) => {
+                String::from("Press any valid key")
+            }
+            (RunResult::CharInputRequested, DebuggerState::Ready) => {
+                String::from("Waiting for character input")
+            }
             (RunResult::Breakpoint, _) => String::from("Breakpoint Hit"),
             (RunResult::ProgError, _) => String::from("Crashed"),
             (_, _) => String::from("End of Program"),
         };
         let op = self.debug.op_for_byte(self.device.pc);
         let line_text = if let Some(op) = op {
-            format!("Bytes: {: <17}     Lines: {}", format_instruction(&op.bytes, self.hex_8bit, self.hex_16bit, self.dump_chars), if self.original_line { op.original_line.trim().to_string()} else {op.processed_line.clone()})
+            format!(
+                "Bytes: {: <17}     Lines: {}",
+                format_instruction(&op.bytes, self.hex_8bit, self.hex_16bit, self.dump_chars),
+                if self.original_line {
+                    op.original_line.trim().to_string()
+                } else {
+                    op.processed_line.clone()
+                }
+            )
         } else {
             String::from("Unknown line: ???")
         };
         lines.push(format!("Status: {}     {}", status_value, line_text));
-        let mut dump = format_dump(self.device.dump(), self.hex_8bit, self.hex_16bit, self.dump_chars);
-        let line_num = op.map(|op| op.line_num.to_string()).unwrap_or(String::from("??"));
+        let mut dump = format_dump(
+            self.device.dump(),
+            self.hex_8bit,
+            self.hex_16bit,
+            self.dump_chars,
+        );
+        let line_num = op
+            .map(|op| op.line_num.to_string())
+            .unwrap_or(String::from("??"));
         dump.insert(0, format!("Line Num: {: <5}  ", line_num));
         lines.extend_from_slice(&fit_in_lines(dump, cols as usize - 1));
         return Ok(lines);
@@ -560,7 +629,9 @@ fn format_instruction(bytes: &Vec<u8>, hex_8bit: bool, hex_16bit: bool, chars: b
         if !output.ends_with(' ') {
             output.push(' ');
         }
-        if iter.peek().is_none() { break; }
+        if iter.peek().is_none() {
+            break;
+        }
         if idx == offset {
             idx += 1;
             let bytes = [*iter.next().unwrap(), *iter.next().unwrap()];
@@ -616,7 +687,10 @@ fn remove_if_present<T: PartialEq>(list: &mut Vec<T>, item: &T) {
 }
 
 fn should_add_history(run_result: &RunResult) -> bool {
-    matches!(run_result, RunResult::Pause | RunResult::StringInputRequested | RunResult::CharInputRequested)
+    matches!(
+        run_result,
+        RunResult::Pause | RunResult::StringInputRequested | RunResult::CharInputRequested
+    )
 }
 
 enum Input {
@@ -633,7 +707,7 @@ enum Input {
     Info,
     Help,
     ExecutionHistory,
-    ToggleAutoRun
+    ToggleAutoRun,
 }
 
 #[derive(Debug, PartialEq)]
@@ -643,5 +717,5 @@ enum DebuggerState {
     WaitingForBreakpointLineToClear(String),
     WaitingForChar,
     WaitingForString(String),
-    ProgEnd
+    ProgEnd,
 }

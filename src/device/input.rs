@@ -1,6 +1,6 @@
-use std::io::stdin;
 use anyhow::Result;
-use crossterm::event::{KeyModifiers, KeyCode, Event};
+use crossterm::event::{Event, KeyCode, KeyModifiers};
+use std::io::stdin;
 
 pub fn read_str() -> Vec<u8> {
     let mut chars = String::new();

@@ -1,10 +1,12 @@
-use crate::assembler::debug_model::{DebugData, DebugLabel, DebugModel, DebugOp, DebugString, DebugUsage};
+use crate::assembler::debug_model::{
+    DebugData, DebugLabel, DebugModel, DebugOp, DebugString, DebugUsage,
+};
 use crate::assembler::program_model::{
     AddressReplacement, DataModel, LabelModel, OpModel, ProgramModel, StringModel,
 };
-use crate::constants::{get_addr_byte_offset, get_byte_count};
 use crate::constants::hardware::{MAX_DATA_BYTES, MAX_STRING_BYTES};
 use crate::constants::system::{PRG_VERSION, TAPE_HEADER_1, TAPE_HEADER_2};
+use crate::constants::{get_addr_byte_offset, get_byte_count};
 use anyhow::{Error, Result};
 use std::collections::{BTreeMap, HashMap};
 
@@ -40,7 +42,13 @@ pub fn generate_byte_code(program_model: ProgramModel) -> Result<(Vec<u8>, Debug
     output.extend_from_slice(&ops_output.bytes);
 
     //Now all label positions are known, update addresses
-    output = update_addresses(output, ops_output.label_targets, ops_output.label_addresses, op_byte_start, &mut debug_model);
+    output = update_addresses(
+        output,
+        ops_output.label_targets,
+        ops_output.label_addresses,
+        op_byte_start,
+        &mut debug_model,
+    );
 
     //Write string len, string bytes and data bytes
     output.extend_from_slice(&(string_bytes.len() as u16).to_be_bytes());
@@ -60,7 +68,7 @@ fn update_addresses(
     targets: HashMap<String, Vec<u16>>,
     sources: HashMap<String, u16>,
     op_byte_start: usize,
-    debug: &mut DebugModel
+    debug: &mut DebugModel,
 ) -> Vec<u8> {
     for (key, source) in sources {
         if let Some(op_offsets) = targets.get(&key) {
@@ -69,9 +77,17 @@ fn update_addresses(
                 bytes[*offset as usize] = addr[0];
                 bytes[(*offset + 1) as usize] = addr[1];
                 let op_offset = *offset - (op_byte_start as u16);
-                let debug_op = debug.ops.iter_mut()
-                    .find(|op| op.byte_addr < op_offset && op_offset < op.byte_addr + get_byte_count(op.bytes[0]) as u16)
-                    .expect(&format!("No DebugOp found but label target exists for '{}', targets: {:?}", key, op_offsets));
+                let debug_op = debug
+                    .ops
+                    .iter_mut()
+                    .find(|op| {
+                        op.byte_addr < op_offset
+                            && op_offset < op.byte_addr + get_byte_count(op.bytes[0]) as u16
+                    })
+                    .expect(&format!(
+                        "No DebugOp found but label target exists for '{}', targets: {:?}",
+                        key, op_offsets
+                    ));
                 let local_offset = op_offset - debug_op.byte_addr;
                 debug_op.bytes[local_offset as usize] = addr[0];
                 debug_op.bytes[(local_offset + 1) as usize] = addr[1];
@@ -118,37 +134,65 @@ fn generate_ops_bytes(
         }
         let (mut bytes, replacement) = op.to_bytes();
         if replacement != AddressReplacement::None {
-            let param_offset = get_addr_byte_offset(op.opcode).expect(&format!("AddressReplacement found for op with no addr byte offset for line {}", op.line_num));
+            let param_offset = get_addr_byte_offset(op.opcode).expect(&format!(
+                "AddressReplacement found for op with no addr byte offset for line {}",
+                op.line_num
+            ));
             match replacement {
                 AddressReplacement::None => panic!("Assembler error: None after a not none check"),
                 AddressReplacement::Label(key) => {
-                    output.label_targets
+                    output
+                        .label_targets
                         .entry(key)
                         .or_insert_with(Vec::new)
                         .push((output.bytes.len() + param_offset + offset) as u16);
                 }
                 AddressReplacement::Str(key) => {
-                    debug.strings
+                    debug
+                        .strings
                         .iter_mut()
                         .find(|str| str.key == key)
-                        .expect(&format!("Unknown string '{}' found in generation on line {} (e1)", key, op.line_num))
+                        .expect(&format!(
+                            "Unknown string '{}' found in generation on line {} (e1)",
+                            key, op.line_num
+                        ))
                         .usage
-                        .push(DebugUsage::new(output.bytes.len() as u16, param_offset as u8, op.line_num));
-                    let addr = string_addresses.get(&key)
-                        .expect(&format!("Unknown string '{}' found in generation on line {} (e2)", key, op.line_num))
+                        .push(DebugUsage::new(
+                            output.bytes.len() as u16,
+                            param_offset as u8,
+                            op.line_num,
+                        ));
+                    let addr = string_addresses
+                        .get(&key)
+                        .expect(&format!(
+                            "Unknown string '{}' found in generation on line {} (e2)",
+                            key, op.line_num
+                        ))
                         .to_be_bytes();
                     bytes[param_offset] = addr[0];
                     bytes[param_offset + 1] = addr[1];
                 }
                 AddressReplacement::Data(key) => {
-                    debug.data
+                    debug
+                        .data
                         .iter_mut()
                         .find(|datum| datum.key == key)
-                        .expect(&format!("Unknown data '{}' found in generation on line {} (e1)", key, op.line_num))
+                        .expect(&format!(
+                            "Unknown data '{}' found in generation on line {} (e1)",
+                            key, op.line_num
+                        ))
                         .usage
-                        .push(DebugUsage::new(output.bytes.len() as u16, param_offset as u8, op.line_num));
-                    let addr = data_addresses.get(&key)
-                        .expect(&format!("Unknown data '{}' found in generation on line {} (e2)", key, op.line_num))
+                        .push(DebugUsage::new(
+                            output.bytes.len() as u16,
+                            param_offset as u8,
+                            op.line_num,
+                        ));
+                    let addr = data_addresses
+                        .get(&key)
+                        .expect(&format!(
+                            "Unknown data '{}' found in generation on line {} (e2)",
+                            key, op.line_num
+                        ))
                         .to_be_bytes();
                     bytes[param_offset] = addr[0];
                     bytes[param_offset + 1] = addr[1];

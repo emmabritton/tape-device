@@ -1,16 +1,16 @@
+mod debug_device;
+mod input;
 pub mod internals;
 mod piped_device;
 mod std_device;
-mod debug_device;
-mod input;
 mod util;
 
 use crate::constants::hardware::{ADDR_REG_COUNT, DATA_REG_COUNT, RAM_SIZE};
+use crate::device::debug_device::{setup_terminal, shutdown_terminal, DebugDevice};
 use crate::device::piped_device::PipedDevice;
 use crate::device::std_device::StdDevice;
 use crate::tape_reader::read_tape;
 use anyhow::Result;
-use crate::device::debug_device::{DebugDevice, setup_terminal, shutdown_terminal};
 use std::fs::read_to_string;
 
 pub fn start(path: &str, input_paths: Vec<&str>) -> Result<()> {

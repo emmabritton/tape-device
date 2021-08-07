@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct DebugModel {
@@ -75,7 +75,10 @@ impl DebugModel {
     }
 
     pub fn byte_for_line(&self, line: usize) -> Option<u16> {
-        self.ops.iter().find(|op| op.line_num == line).map(|op| op.byte_addr)
+        self.ops
+            .iter()
+            .find(|op| op.line_num == line)
+            .map(|op| op.byte_addr)
     }
 }
 

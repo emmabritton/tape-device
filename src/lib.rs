@@ -63,13 +63,14 @@ pub fn run() -> Result<()> {
             ),
         )
         .subcommand(
-            SubCommand::with_name("debug").arg(
-                Arg::with_name("tape")
-                    .help("Device tape to debug")
-                    .takes_value(true)
-                    .multiple(false)
-                    .required(true),
-            )
+            SubCommand::with_name("debug")
+                .arg(
+                    Arg::with_name("tape")
+                        .help("Device tape to debug")
+                        .takes_value(true)
+                        .multiple(false)
+                        .required(true),
+                )
                 .arg(
                     Arg::with_name("debug_file")
                         .help("Debug info file")
@@ -83,7 +84,7 @@ pub fn run() -> Result<()> {
                         .takes_value(true)
                         .multiple(true)
                         .required(false),
-                )
+                ),
         )
         .arg(
             Arg::with_name("tape")
@@ -125,7 +126,7 @@ pub fn run() -> Result<()> {
         device::start_debug(
             matches.value_of("tape").unwrap(),
             matches.value_of("debug_file").unwrap(),
-            validate(convert(matches.values_of("input")))
+            validate(convert(matches.values_of("input"))),
         )?;
     } else if let Some(matches) = matches.subcommand_matches("assemble") {
         assembler::start(

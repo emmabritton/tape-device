@@ -1,14 +1,18 @@
-use crate::assembler::debug_model::{DebugData, DebugLabel, DebugModel, DebugOp, DebugString};
+use crate::assembler::debug_model::{
+    DebugData, DebugLabel, DebugModel, DebugOp, DebugString, DebugUsage,
+};
 use crate::assembler::program_model::{
     AddressReplacement, DataModel, LabelModel, OpModel, ProgramModel, StringModel,
 };
-use crate::constants::get_addr_byte_offset;
 use crate::constants::hardware::{MAX_DATA_BYTES, MAX_STRING_BYTES};
 use crate::constants::system::{PRG_VERSION, TAPE_HEADER_1, TAPE_HEADER_2};
+use crate::constants::{get_addr_byte_offset, get_byte_count};
 use anyhow::{Error, Result};
 use std::collections::{BTreeMap, HashMap};
 
 pub fn generate_byte_code(program_model: ProgramModel) -> Result<(Vec<u8>, DebugModel)> {
+    //Write header
+    //0xFD A0 01 <name len> <name> <ver len> <ver>
     let mut output = vec![TAPE_HEADER_1, TAPE_HEADER_2, PRG_VERSION];
     let mut debug_model = DebugModel::default();
     output.push(program_model.name.len() as u8);
@@ -16,51 +20,55 @@ pub fn generate_byte_code(program_model: ProgramModel) -> Result<(Vec<u8>, Debug
     output.push(program_model.version.len() as u8);
     output.extend_from_slice(program_model.version.as_bytes());
 
-    let op_byte_start = output.len() + 2;
+    let op_byte_start = output.len() + 2; //+2 for op byte count written once len is known
 
+    //Generate bytes and addresses for strings and data
+    let (string_bytes, string_addresses) =
+        generate_string_bytes(program_model.strings, &mut debug_model)?;
+
+    let (data_bytes, data_addresses) = generate_data_bytes(program_model.data, &mut debug_model)?;
+
+    //Generate and write op bytes
     let ops_output = generate_ops_bytes(
         &program_model.ops,
         op_byte_start,
         program_model.labels,
         &mut debug_model,
-    )?; //+2 for op byte count written once len is known
+        string_addresses,
+        data_addresses,
+    )?;
 
-    //TODO change execution order so data and strings are created first
-    //then when making ops the addresses will be known
-    //and the compiler won't have to make 3 passes to write addresses
     output.extend_from_slice(&(ops_output.bytes.len() as u16).to_be_bytes());
     output.extend_from_slice(&ops_output.bytes);
 
-    let (string_bytes, string_addresses) =
-        generate_string_bytes(program_model.strings, &mut debug_model)?;
+    //Now all label positions are known, update addresses
+    output = update_addresses(
+        output,
+        ops_output.label_targets,
+        ops_output.label_addresses,
+        op_byte_start,
+        &mut debug_model,
+    );
 
+    //Write string len, string bytes and data bytes
     output.extend_from_slice(&(string_bytes.len() as u16).to_be_bytes());
     output.extend_from_slice(&string_bytes);
-
-    let (data_bytes, data_addresses) = generate_data_bytes(program_model.data, &mut debug_model)?;
-
     output.extend_from_slice(&data_bytes);
-
-    output = update_addresses(output, ops_output.string_targets, string_addresses);
-    output = update_addresses(output, ops_output.data_targets, data_addresses);
-    output = update_addresses(output, ops_output.label_targets, ops_output.label_addresses);
-
-    //Copy updates bytes into debug model
-    //This is primarily for copying the string and data addresses
-    let mut final_op_bytes = output[op_byte_start..op_byte_start + ops_output.bytes.len()].to_vec();
-    for op in debug_model.ops.iter_mut() {
-        for byte in op.bytes.iter_mut() {
-            *byte = final_op_bytes.remove(0);
-        }
-    }
 
     Ok((output, debug_model))
 }
 
+/// Replace placeholder address bytes with actual values
+/// * `bytes`: The list of bytes to update
+/// * `targets`: The indexes of bytes in `bytes` to update, mapped by a string key
+/// * `sources`: The actual values to write at the indexes in `targets`, mapped by a string key
+/// * `op_byte_start`: Index of the first op byte
 fn update_addresses(
     mut bytes: Vec<u8>,
     targets: HashMap<String, Vec<u16>>,
     sources: HashMap<String, u16>,
+    op_byte_start: usize,
+    debug: &mut DebugModel,
 ) -> Vec<u8> {
     for (key, source) in sources {
         if let Some(op_offsets) = targets.get(&key) {
@@ -68,6 +76,23 @@ fn update_addresses(
                 let addr = source.to_be_bytes();
                 bytes[*offset as usize] = addr[0];
                 bytes[(*offset + 1) as usize] = addr[1];
+                let op_offset = *offset - (op_byte_start as u16);
+                let debug_op = debug
+                    .ops
+                    .iter_mut()
+                    .find(|op| {
+                        op.byte_addr < op_offset
+                            && op_offset < op.byte_addr + get_byte_count(op.bytes[0]) as u16
+                    })
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "No DebugOp found but label target exists for '{}', targets: {:?}",
+                            key, op_offsets
+                        )
+                    });
+                let local_offset = op_offset - debug_op.byte_addr;
+                debug_op.bytes[local_offset as usize] = addr[0];
+                debug_op.bytes[(local_offset + 1) as usize] = addr[1];
             }
         }
     }
@@ -77,8 +102,6 @@ fn update_addresses(
 #[derive(Debug, Default)]
 struct OpsOutput {
     bytes: Vec<u8>,
-    string_targets: HashMap<String, Vec<u16>>,
-    data_targets: HashMap<String, Vec<u16>>,
     label_targets: HashMap<String, Vec<u16>>,
     label_addresses: HashMap<String, u16>,
 }
@@ -88,6 +111,8 @@ fn generate_ops_bytes(
     offset: usize,
     labels: HashMap<String, LabelModel>,
     debug: &mut DebugModel,
+    string_addresses: HashMap<String, u16>,
+    data_addresses: HashMap<String, u16>,
 ) -> Result<OpsOutput> {
     let mut labels: BTreeMap<usize, LabelModel> = convert_label_map_to_linenum(labels);
     let mut output = OpsOutput::default();
@@ -109,19 +134,82 @@ fn generate_ops_bytes(
                 labels.remove(&lbl_line_num);
             }
         }
-        let (bytes, replacement) = op.to_bytes();
+        let (mut bytes, replacement) = op.to_bytes();
         if replacement != AddressReplacement::None {
-            let param_offset = get_addr_byte_offset(op.opcode);
-            let (key, targets) = match replacement {
-                AddressReplacement::None => panic!("System error: None after a not none check"),
-                AddressReplacement::Label(key) => (key, &mut output.label_targets),
-                AddressReplacement::Str(key) => (key, &mut output.string_targets),
-                AddressReplacement::Data(key) => (key, &mut output.data_targets),
+            let param_offset = get_addr_byte_offset(op.opcode).unwrap_or_else(|| {
+                panic!(
+                    "AddressReplacement found for op with no addr byte offset for line {}",
+                    op.line_num
+                )
+            });
+            match replacement {
+                AddressReplacement::None => panic!("Assembler error: None after a not none check"),
+                AddressReplacement::Label(key) => {
+                    output
+                        .label_targets
+                        .entry(key)
+                        .or_insert_with(Vec::new)
+                        .push((output.bytes.len() + param_offset + offset) as u16);
+                }
+                AddressReplacement::Str(key) => {
+                    debug
+                        .strings
+                        .iter_mut()
+                        .find(|str| str.key == key)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Unknown string '{}' found in generation on line {} (e1)",
+                                key, op.line_num
+                            )
+                        })
+                        .usage
+                        .push(DebugUsage::new(
+                            output.bytes.len() as u16,
+                            param_offset as u8,
+                            op.line_num,
+                        ));
+                    let addr = string_addresses
+                        .get(&key)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Unknown string '{}' found in generation on line {} (e2)",
+                                key, op.line_num
+                            )
+                        })
+                        .to_be_bytes();
+                    bytes[param_offset] = addr[0];
+                    bytes[param_offset + 1] = addr[1];
+                }
+                AddressReplacement::Data(key) => {
+                    debug
+                        .data
+                        .iter_mut()
+                        .find(|datum| datum.key == key)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Unknown data '{}' found in generation on line {} (e1)",
+                                key, op.line_num
+                            )
+                        })
+                        .usage
+                        .push(DebugUsage::new(
+                            output.bytes.len() as u16,
+                            param_offset as u8,
+                            op.line_num,
+                        ));
+                    let addr = data_addresses
+                        .get(&key)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Unknown data '{}' found in generation on line {} (e2)",
+                                key, op.line_num
+                            )
+                        })
+                        .to_be_bytes();
+                    bytes[param_offset] = addr[0];
+                    bytes[param_offset + 1] = addr[1];
+                }
             };
-            targets
-                .entry(key)
-                .or_insert_with(Vec::new)
-                .push((output.bytes.len() + param_offset + offset) as u16);
         }
         debug.ops.push(DebugOp::new(
             output.bytes.len() as u16,
@@ -230,7 +318,11 @@ mod test {
         sources.insert(String::from("abc"), 0);
         sources.insert(String::from("foo"), 4);
 
-        let output = update_addresses(bytes, targets, sources);
+        let ops = vec![
+            DebugOp::new(0, String::from("PRTS foo"), 0, String::from("PRTS foo"), vec![PRTS_STR, 0, 0])
+        ];
+
+        let output = update_addresses(bytes, targets, sources, 0,&mut DebugModel::new(ops, vec![], vec![], vec![]));
         assert_eq!(output, vec![PRTS_STR, 0, 4]);
     }
 
@@ -305,6 +397,17 @@ mod test {
         #[test]
         #[rustfmt::skip]
         fn test_target_gen() {
+            let mut string_addresses = HashMap::new();
+            string_addresses.insert(String::from("foo"), 0_u16);
+            let mut data_addresses = HashMap::new();
+            data_addresses.insert(String::from("bar"), 0_u16);
+            let mut debug = DebugModel::new(
+                vec![],
+                vec![DebugString::new(0, String::from("foo"), String::new(), String::new(), 0)],
+                vec![DebugData::new(0, String::from("bar"), vec![], String::new(), 0)],
+                vec![]
+            );
+
             let output = generate_ops_bytes(
                 &[
                     OpModel::new(PRTS_STR, vec![StrKey(String::from("foo"))], String::new(), String::from("prts foo"), 0),
@@ -312,14 +415,11 @@ mod test {
                 ],
                 0,
                 HashMap::new(),
-                &mut DebugModel::default(),
+                &mut debug,
+                string_addresses,
+                data_addresses,
             )
                 .unwrap();
-
-            let mut expected_strings = HashMap::new();
-            expected_strings.insert(String::from("foo"), vec![1_u16]);
-            let mut expected_data = HashMap::new();
-            expected_data.insert(String::from("bar"), vec![5_u16]);
 
             assert_eq!(
                 output.bytes,
@@ -328,8 +428,6 @@ mod test {
                     LD_AREG_DATA_REG_VAL, REG_A0, 0, 0, REG_D2, 10
                 ]
             );
-            assert_eq!(output.string_targets, expected_strings);
-            assert_eq!(output.data_targets, expected_data);
         }
     }
 
@@ -448,7 +546,7 @@ mod test {
         model.ops.push(OpModel::new(ADD_REG_REG, vec![Param::DataReg(REG_D0), Param::DataReg(REG_D1)], String::new(), String::from("add d0 d1"), 0));
         model.ops.push(OpModel::new(INC_REG, vec![Param::DataReg(REG_ACC)], String::new(), String::from("inc acc"), 0));
         model.ops.push(OpModel::new(LD_AREG_DATA_VAL_REG, vec![Param::AddrReg(REG_A0), Param::DataKey(String::from("dk1")), Param::Number(2), Param::DataReg(REG_D3)], String::new(), String::from("ld a0 dk1 2 d3"), 1));
-        model.ops.push(OpModel::new(PRTS_STR, vec![Param::StrKey(String::from("abc"))], String::new(), String::from("prts abc"), 0));
+        model.ops.push(OpModel::new(PRTS_STR, vec![Param::StrKey(String::from("abc"))], String::new(), String::from("prts abc"), 3));
 
         let (bytes, model) = generate_byte_code(model).unwrap();
 
@@ -469,6 +567,11 @@ mod test {
             ]
         );
 
+        let mut debug_str = DebugString::new(0, String::from("abc"), String::from("foo"), String::new(), 0);
+        let mut debug_data = DebugData::new(0, String::from("dk1"), vec![vec![10, 11], vec![50, 51], vec![97, 98, 99, 100]], String::new(), 0);
+        debug_str.usage.push(DebugUsage::new(11, 1, 3));
+        debug_data.usage.push(DebugUsage::new(5, 2, 1));
+
         assert_eq!(
             model,
             DebugModel::new(
@@ -476,12 +579,11 @@ mod test {
                     DebugOp::new(0, String::from("add d0 d1"), 0, String::new(), vec![ADD_REG_REG, REG_D0, REG_D1]),
                     DebugOp::new(3, String::from("inc acc"), 0, String::new(), vec![INC_REG, REG_ACC]),
                     DebugOp::new(5, String::from("ld a0 dk1 2 d3"), 1, String::new(), vec![LD_AREG_DATA_VAL_REG, REG_A0, 0, 0, 2, REG_D3]),
-                    DebugOp::new(11, String::from("prts abc"), 0, String::new(), vec![PRTS_STR, 0, 0]),
-                ], vec![
-                    DebugString::new(0, String::from("abc"), String::from("foo"), String::new(), 0)
-                ], vec![
-                    DebugData::new(0, String::from("dk1"), vec![vec![10, 11], vec![50, 51], vec![97, 98, 99, 100]], String::new(), 0)
-                ], vec![])
+                    DebugOp::new(11, String::from("prts abc"), 3, String::new(), vec![PRTS_STR, 0, 0]),
+                ],
+                vec![debug_str],
+                vec![debug_data],
+                vec![])
         );
     }
 }

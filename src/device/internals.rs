@@ -21,7 +21,7 @@ pub struct Device {
     pub tape_data: Vec<u8>,
     data_files: Vec<String>,
     flags: Flags,
-    pc: u16,
+    pub pc: u16,
     pub acc: u8,
     sp: u16,
     fp: u16,

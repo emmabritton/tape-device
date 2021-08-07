@@ -1,6 +1,6 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct DebugModel {
     pub ops: Vec<DebugOp>,
     pub strings: Vec<DebugString>,
@@ -8,16 +8,16 @@ pub struct DebugModel {
     pub labels: Vec<DebugLabel>,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct DebugOp {
     pub byte_addr: u16,
-    original_line: String,
+    pub original_line: String,
     pub line_num: usize,
-    processed_line: String,
+    pub processed_line: String,
     pub bytes: Vec<u8>,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct DebugString {
     addr: u16,
     pub(crate) key: String,
@@ -27,7 +27,7 @@ pub struct DebugString {
     pub usage: Vec<DebugUsage>,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct DebugData {
     addr: u16,
     pub(crate) key: String,
@@ -37,7 +37,7 @@ pub struct DebugData {
     pub usage: Vec<DebugUsage>,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct DebugLabel {
     byte: u16,
     pub(crate) name: String,
@@ -46,7 +46,7 @@ pub struct DebugLabel {
     pub usage: Vec<DebugUsage>,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct DebugUsage {
     op_addr: u16,
     offset: u8,
@@ -54,7 +54,6 @@ pub struct DebugUsage {
 }
 
 impl DebugModel {
-    #[allow(dead_code)]
     pub fn new(
         ops: Vec<DebugOp>,
         strings: Vec<DebugString>,
@@ -67,6 +66,19 @@ impl DebugModel {
             data,
             labels,
         }
+    }
+}
+
+impl DebugModel {
+    pub fn op_for_byte(&self, byte: u16) -> Option<&DebugOp> {
+        self.ops.iter().find(|op| op.byte_addr == byte)
+    }
+
+    pub fn byte_for_line(&self, line: usize) -> Option<u16> {
+        self.ops
+            .iter()
+            .find(|op| op.line_num == line)
+            .map(|op| op.byte_addr)
     }
 }
 
@@ -139,8 +151,6 @@ impl DebugLabel {
 }
 
 impl DebugUsage {
-    //TODO implement usage listing
-    #[allow(dead_code)]
     pub fn new(op_byte: u16, offset: u8, line: usize) -> Self {
         DebugUsage {
             op_addr: op_byte,

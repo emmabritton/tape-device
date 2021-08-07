@@ -1,6 +1,6 @@
 [package]
 name = "tape_device"
-version = "1.1.0"
+version = "1.2.0"
 description = "Executor, compiler and decompiler for fictional tape device"
 authors = ["Ray Britton <raybritton@gmail.com>"]
 edition = "2018"

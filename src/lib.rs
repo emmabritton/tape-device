@@ -62,6 +62,30 @@ pub fn run() -> Result<()> {
                     .required(true),
             ),
         )
+        .subcommand(
+            SubCommand::with_name("debug")
+                .arg(
+                    Arg::with_name("tape")
+                        .help("Device tape to debug")
+                        .takes_value(true)
+                        .multiple(false)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("debug_file")
+                        .help("Debug info file")
+                        .takes_value(true)
+                        .multiple(false)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("input")
+                        .help("Data tape for reading/writing")
+                        .takes_value(true)
+                        .multiple(true)
+                        .required(false),
+                ),
+        )
         .arg(
             Arg::with_name("tape")
                 .help("Device tape to execute")
@@ -98,6 +122,12 @@ pub fn run() -> Result<()> {
                 validate(convert(matches.values_of("input"))),
             )?;
         }
+    } else if let Some(matches) = matches.subcommand_matches("debug") {
+        device::start_debug(
+            matches.value_of("tape").unwrap(),
+            matches.value_of("debug_file").unwrap(),
+            validate(convert(matches.values_of("input"))),
+        )?;
     } else if let Some(matches) = matches.subcommand_matches("assemble") {
         assembler::start(
             matches.value_of("file").unwrap(),

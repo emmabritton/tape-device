@@ -194,15 +194,14 @@ pub fn get_byte_count(opcode: u8) -> usize {
     }
 }
 
-//TODO I don't think this should have values for _AREG ops
-pub fn get_addr_byte_offset(opcode: u8) -> usize {
+pub fn get_addr_byte_offset(opcode: u8) -> Option<usize> {
     match opcode {
-        JMP_ADDR | JMP_AREG | JE_ADDR | JE_AREG | JL_ADDR | JL_AREG | JNE_ADDR | JNE_AREG
-        | JG_ADDR | JG_AREG | OVER_ADDR | OVER_AREG | NOVER_ADDR | NOVER_AREG | CALL_ADDR
-        | CALL_AREG | RET | IPOLL_AREG | IPOLL_ADDR | PRTS_STR | MEMP_ADDR => 1,
-        FCHK_VAL_AREG | FCHK_VAL_ADDR | FCHK_REG_AREG | FCHK_REG_ADDR | LD_AREG_DATA_VAL_VAL
-        | LD_AREG_DATA_VAL_REG | LD_AREG_DATA_REG_REG | LD_AREG_DATA_REG_VAL => 2,
-        _ => panic!("Opcode {:02X} doesn't have any addr param", opcode),
+        JMP_ADDR | JE_ADDR | JL_ADDR | JNE_ADDR | RSTR_ADDR | JG_ADDR | OVER_ADDR | NOVER_ADDR
+        | CALL_ADDR | MEMR_ADDR | MEMW_ADDR | IPOLL_ADDR | PRTS_STR | MEMP_ADDR => Some(1),
+        FCHK_VAL_ADDR | FCHK_REG_ADDR | LD_AREG_DATA_VAL_VAL | CPY_AREG_ADDR | CMP_AREG_ADDR
+        | FILEW_VAL_ADDR | FILER_VAL_ADDR | FILER_REG_ADDR | LD_AREG_DATA_VAL_REG
+        | LD_AREG_DATA_REG_REG | LD_AREG_DATA_REG_VAL => Some(2),
+        _ => None,
     }
 }
 

@@ -1,12 +1,17 @@
+mod debug_device;
+mod input;
 pub mod internals;
 mod piped_device;
 mod std_device;
+mod util;
 
 use crate::constants::hardware::{ADDR_REG_COUNT, DATA_REG_COUNT, RAM_SIZE};
+use crate::device::debug_device::{setup_terminal, shutdown_terminal, DebugDevice};
 use crate::device::piped_device::PipedDevice;
 use crate::device::std_device::StdDevice;
 use crate::tape_reader::read_tape;
 use anyhow::Result;
+use std::fs::read_to_string;
 
 pub fn start(path: &str, input_paths: Vec<&str>) -> Result<()> {
     let tape = read_tape(path)?;
@@ -34,6 +39,26 @@ pub fn start_piped(path: &str, input_paths: Vec<&str>) -> Result<()> {
         input_paths.iter().map(|str| str.to_string()).collect(),
     );
     device.run();
+
+    Ok(())
+}
+
+pub fn start_debug(path: &str, debug_path: &str, input_paths: Vec<&str>) -> Result<()> {
+    let tape = read_tape(path)?;
+    let debug_info_text = read_to_string(debug_path).expect("Unable to read debug info file");
+    let debug_info = serde_json::from_str(&debug_info_text).expect("Unable to parse debug info");
+
+    let mut device = DebugDevice::new(
+        tape.ops,
+        tape.strings,
+        tape.data,
+        debug_info,
+        input_paths.iter().map(|str| str.to_string()).collect(),
+    );
+
+    setup_terminal()?;
+    device.run()?;
+    shutdown_terminal();
 
     Ok(())
 }

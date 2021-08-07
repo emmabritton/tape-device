@@ -27,9 +27,6 @@ Commands are sent/received in the format `<prefix><content>` as bytes
 | Input Key | k | char (1 byte) | `i,T` | `x6954` | Send one key press to device | 
 | Input String | t | String | `t` | `x6954` | Send one key press to device | 
 | Request Memory | m | 2x addr (2 bytes each) | `t` | `x6954` | Send one key press to device |  
-| Set Memory | n | addr, len, bytes | `n,450,2,4,5` | `x6E01C2..` | Send one key press to device | 
-| Set Register | r | id, value | `r,1,50` | `x720132` | Send one key press to device |  
-| Stop | f | - | `f` | `x66` | Tell Piped Device to finish |  
 
 #### Output
 
@@ -78,3 +75,4 @@ First dump should always be `0000 0000 0000 FFFF FFFF 00 00 00 00 00 00`
  * `<return>`
  * `<tab>`
  * `<backspace>`
+ * `<delete>`

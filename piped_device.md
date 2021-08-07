@@ -77,3 +77,4 @@ First dump should always be `0000 0000 0000 FFFF FFFF 00 00 00 00 00 00`
  * `<return>`
  * `<tab>`
  * `<backspace>`
+ * `<delete>`

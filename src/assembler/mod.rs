@@ -1,4 +1,4 @@
-mod debug_model;
+pub mod debug_model;
 mod generator;
 pub mod parser;
 pub mod program_model;

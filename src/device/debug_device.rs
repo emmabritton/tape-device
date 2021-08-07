@@ -19,7 +19,6 @@ pub struct DebugDevice {
     device: Device,
     debug: DebugModel,
     last_run_result: RunResult,
-    ui_track_stack: bool,
     ui_memory: Option<(u16, u16)>,
     state: DebuggerState,
     footer_height: u16,
@@ -95,7 +94,6 @@ impl DebugDevice {
             device: Device::new(ops, strings, data, data_files),
             debug: debug_info,
             last_run_result: RunResult::Pause,
-            ui_track_stack: false,
             ui_memory: None,
             state: DebuggerState::Ready,
             footer_height: 0,
@@ -305,7 +303,7 @@ impl DebugDevice {
                         DebuggerState::WaitingForBreakpointLineToSet(line) => {
                             match key.code {
                                 KeyCode::Char(chr) => {
-                                    if chr >= '0' && chr <= '9' {
+                                    if ('0'..='9').contains(&chr) {
                                         let mut num = line.clone();
                                         num.push(chr);
                                         self.state =
@@ -343,7 +341,7 @@ impl DebugDevice {
                         DebuggerState::WaitingForBreakpointLineToClear(line) => {
                             match key.code {
                                 KeyCode::Char(chr) => {
-                                    if chr >= '0' && chr <= '9' {
+                                    if ('0'..='9').contains(&chr) {
                                         let mut num = line.clone();
                                         num.push(chr);
                                         self.state =
@@ -590,10 +588,10 @@ impl DebugDevice {
         );
         let line_num = op
             .map(|op| op.line_num.to_string())
-            .unwrap_or(String::from("??"));
+            .unwrap_or_else(|| String::from("??"));
         dump.insert(0, format!("Line Num: {: <5}  ", line_num));
         lines.extend_from_slice(&fit_in_lines(dump, cols as usize - 1));
-        return Ok(lines);
+        Ok(lines)
     }
 
     fn reset_cursor(&self) -> Result<()> {
@@ -619,7 +617,7 @@ fn format_dump(dump: Dump, hex_8bit: bool, hex_16bit: bool, chars: bool) -> Vec<
     ]
 }
 
-fn format_instruction(bytes: &Vec<u8>, hex_8bit: bool, hex_16bit: bool, chars: bool) -> String {
+fn format_instruction(bytes: &[u8], hex_8bit: bool, hex_16bit: bool, chars: bool) -> String {
     let mut iter = bytes.iter().peekable();
     let op = iter.next().expect("No OP byte found for instruction");
     let mut output = format!("{} ", format_8bit(*op, true, false));

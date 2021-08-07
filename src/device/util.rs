@@ -163,7 +163,7 @@ mod test {
             );
             let result1 = breaklines(str.clone(), 4);
             let result2 = breaklines(str.clone(), 10);
-            let result3 = breaklines(str.clone(), 20);
+            let result3 = breaklines(str, 20);
 
             assert_eq!(
                 result1,

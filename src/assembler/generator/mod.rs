@@ -84,10 +84,12 @@ fn update_addresses(
                         op.byte_addr < op_offset
                             && op_offset < op.byte_addr + get_byte_count(op.bytes[0]) as u16
                     })
-                    .expect(&format!(
-                        "No DebugOp found but label target exists for '{}', targets: {:?}",
-                        key, op_offsets
-                    ));
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "No DebugOp found but label target exists for '{}', targets: {:?}",
+                            key, op_offsets
+                        )
+                    });
                 let local_offset = op_offset - debug_op.byte_addr;
                 debug_op.bytes[local_offset as usize] = addr[0];
                 debug_op.bytes[(local_offset + 1) as usize] = addr[1];
@@ -134,10 +136,12 @@ fn generate_ops_bytes(
         }
         let (mut bytes, replacement) = op.to_bytes();
         if replacement != AddressReplacement::None {
-            let param_offset = get_addr_byte_offset(op.opcode).expect(&format!(
-                "AddressReplacement found for op with no addr byte offset for line {}",
-                op.line_num
-            ));
+            let param_offset = get_addr_byte_offset(op.opcode).unwrap_or_else(|| {
+                panic!(
+                    "AddressReplacement found for op with no addr byte offset for line {}",
+                    op.line_num
+                )
+            });
             match replacement {
                 AddressReplacement::None => panic!("Assembler error: None after a not none check"),
                 AddressReplacement::Label(key) => {
@@ -152,10 +156,12 @@ fn generate_ops_bytes(
                         .strings
                         .iter_mut()
                         .find(|str| str.key == key)
-                        .expect(&format!(
-                            "Unknown string '{}' found in generation on line {} (e1)",
-                            key, op.line_num
-                        ))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Unknown string '{}' found in generation on line {} (e1)",
+                                key, op.line_num
+                            )
+                        })
                         .usage
                         .push(DebugUsage::new(
                             output.bytes.len() as u16,
@@ -164,35 +170,37 @@ fn generate_ops_bytes(
                         ));
                     let addr = string_addresses
                         .get(&key)
-                        .expect(&format!(
-                            "Unknown string '{}' found in generation on line {} (e2)",
-                            key, op.line_num
-                        ))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Unknown string '{}' found in generation on line {} (e2)",
+                                key, op.line_num
+                            )
+                        })
                         .to_be_bytes();
                     bytes[param_offset] = addr[0];
                     bytes[param_offset + 1] = addr[1];
                 }
                 AddressReplacement::Data(key) => {
-                    debug
-                        .data
-                        .iter_mut()
-                        .find(|datum| datum.key == key)
-                        .expect(&format!(
+                    debug.data.iter_mut().find(|datum| datum.key == key)..unwrap_or_else(|| {
+                        panic!(
                             "Unknown data '{}' found in generation on line {} (e1)",
                             key, op.line_num
-                        ))
-                        .usage
-                        .push(DebugUsage::new(
-                            output.bytes.len() as u16,
-                            param_offset as u8,
-                            op.line_num,
-                        ));
+                        )
+                    })
+                    .usage
+                    .push(DebugUsage::new(
+                        output.bytes.len() as u16,
+                        param_offset as u8,
+                        op.line_num,
+                    ));
                     let addr = data_addresses
                         .get(&key)
-                        .expect(&format!(
-                            "Unknown data '{}' found in generation on line {} (e2)",
-                            key, op.line_num
-                        ))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Unknown data '{}' found in generation on line {} (e2)",
+                                key, op.line_num
+                            )
+                        })
                         .to_be_bytes();
                     bytes[param_offset] = addr[0];
                     bytes[param_offset + 1] = addr[1];

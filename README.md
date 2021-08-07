@@ -49,3 +49,9 @@ For a debugger add `--save-debug` to save debug data
 ```
 tape_device decompile program.tape
 ```
+
+**Debug program**
+```
+tape_device debug program.tape program.debug [input]
+```
+[Debug docs](https://github.com/raybritton/tape-device/blob/master/debug_device.md)

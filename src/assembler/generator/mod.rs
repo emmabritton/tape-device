@@ -181,18 +181,22 @@ fn generate_ops_bytes(
                     bytes[param_offset + 1] = addr[1];
                 }
                 AddressReplacement::Data(key) => {
-                    debug.data.iter_mut().find(|datum| datum.key == key).unwrap_or_else(|| {
-                        panic!(
-                            "Unknown data '{}' found in generation on line {} (e1)",
-                            key, op.line_num
-                        )
-                    })
-                    .usage
-                    .push(DebugUsage::new(
-                        output.bytes.len() as u16,
-                        param_offset as u8,
-                        op.line_num,
-                    ));
+                    debug
+                        .data
+                        .iter_mut()
+                        .find(|datum| datum.key == key)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Unknown data '{}' found in generation on line {} (e1)",
+                                key, op.line_num
+                            )
+                        })
+                        .usage
+                        .push(DebugUsage::new(
+                            output.bytes.len() as u16,
+                            param_offset as u8,
+                            op.line_num,
+                        ));
                     let addr = data_addresses
                         .get(&key)
                         .unwrap_or_else(|| {

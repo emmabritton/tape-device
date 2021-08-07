@@ -197,7 +197,7 @@ pub fn get_byte_count(opcode: u8) -> usize {
 pub fn get_addr_byte_offset(opcode: u8) -> Option<usize> {
     match opcode {
         JMP_ADDR | JE_ADDR | JL_ADDR | JNE_ADDR | RSTR_ADDR | JG_ADDR | OVER_ADDR | NOVER_ADDR
-        | CALL_ADDR | MEMR_ADDR | MEMW_ADDR | RET | IPOLL_ADDR | PRTS_STR | MEMP_ADDR => Some(1),
+        | CALL_ADDR | MEMR_ADDR | MEMW_ADDR | IPOLL_ADDR | PRTS_STR | MEMP_ADDR => Some(1),
         FCHK_VAL_ADDR | FCHK_REG_ADDR | LD_AREG_DATA_VAL_VAL | CPY_AREG_ADDR | CMP_AREG_ADDR
         | FILEW_VAL_ADDR | FILER_VAL_ADDR | FILER_REG_ADDR | LD_AREG_DATA_VAL_REG
         | LD_AREG_DATA_REG_REG | LD_AREG_DATA_REG_VAL => Some(2),

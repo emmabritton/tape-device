@@ -1,6 +1,6 @@
 # Tape Device
 
-Language (vm, assembler, and decompiler) for fictional computer that executes programs optionally with input data.
+Language (vm, assembler, debugger, and decompiler) for fictional computer that executes programs optionally with input data.
 
 ### Device
 

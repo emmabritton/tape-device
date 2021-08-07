@@ -181,7 +181,7 @@ fn generate_ops_bytes(
                     bytes[param_offset + 1] = addr[1];
                 }
                 AddressReplacement::Data(key) => {
-                    debug.data.iter_mut().find(|datum| datum.key == key)..unwrap_or_else(|| {
+                    debug.data.iter_mut().find(|datum| datum.key == key).unwrap_or_else(|| {
                         panic!(
                             "Unknown data '{}' found in generation on line {} (e1)",
                             key, op.line_num
@@ -314,7 +314,11 @@ mod test {
         sources.insert(String::from("abc"), 0);
         sources.insert(String::from("foo"), 4);
 
-        let output = update_addresses(bytes, targets, sources, 0,&mut DebugModel::new(vec![], vec![], vec![], vec![]));
+        let ops = vec![
+            DebugOp::new(0, String::from("PRTS foo"), 0, String::from("PRTS foo"), vec![PRTS_STR, 0, 0])
+        ];
+
+        let output = update_addresses(bytes, targets, sources, 0,&mut DebugModel::new(ops, vec![], vec![], vec![]));
         assert_eq!(output, vec![PRTS_STR, 0, 4]);
     }
 

@@ -57,7 +57,7 @@ The tape file can include strings that can be easily printed using `PRTS`.
 .strings
 example=This is a string.
 .ops
-prtd example
+prts example
 ```
 
 The strings are trimmed, to include whitespace place the string double quotes:
@@ -178,7 +178,7 @@ This allows length to be retrieved like this:
 .data
 list=[[10,11],[97,98,99]]
 .ops
-LD ACC lists 0 0
+LD A0 lists 0 0
 ```
 
 Packaged: `02 02 03 0A 0B 61 62 63`
@@ -245,6 +245,8 @@ prtd a0
 
 Compare 1st param and 2nd param and set result in `ACC`
 If 1st param is a data_reg and 2nd param is an addr_reg then the 2nd param will be used as an address for data
+ACC will contain 0 if equal, 1 if LHS < RHS, 2 if LHS > RHS
+Use JE, JNE, JL, JG to act on result
 
 ### Jump
 
@@ -324,7 +326,7 @@ or bits in 1st param and 2nd param and store in `ACC`
 
 `NOT reg`
 
-Invert bits in 1st param
+Invert bits in 1st param and store in `ACC` 
 
 ### Stack
 

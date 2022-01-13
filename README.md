@@ -55,3 +55,7 @@ tape_device decompile program.tape
 tape_device debug program.tape program.debug [input]
 ```
 [Debug docs](https://github.com/raybritton/tape-device/blob/master/debug_device.md)
+
+**GUI debugger**
+
+https://github.com/raybritton/tape-device-gui-debugger

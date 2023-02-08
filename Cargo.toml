@@ -2,7 +2,7 @@
 name = "tape_device"
 version = "1.2.0"
 description = "Executor, compiler and decompiler for fictional tape device"
-authors = ["Ray Britton <raybritton@gmail.com>"]
+authors = ["Emma Britton <emmabritton@pm.me"]
 edition = "2018"
 readme = "README.md"
 license-file = "LICENSE"
